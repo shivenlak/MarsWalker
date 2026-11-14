@@ -123,8 +123,27 @@ Stop positions as snapped by `scripts/fetch_rover.py`:
 | Boxwork entrance ridge | site 117 drive 2538 (sol 4605) | 137.37956, −4.80443, −3631 m |
 | Boxwork main exposure | site 120 drive 0 (sol 4709; parked to ~4789) | 137.38105, −4.80800, −3609 m |
 
+## Game build: 3D world + conditions (feature/game, 2026-11-14)
+
+All verified live on 2026-11-14 and built by `scripts/build_world.py` and `scripts/fetch_conditions.py`.
+
+| Layer | Source | How it is used | Output |
+|---|---|---|---|
+| Walkable terrain | USGS MSL Gale DEM Mosaic 1 m v3 (b), same cached AOI window | 2 m block-mean heightmap (Uint16, ~1 cm steps) for the 3D mesh and for walking physics; 1 m world-space normal maps for lighting | `world/height.bin`, `world/chunks/n*.jpg` |
+| Ground colour | HiRISE colour basemap tiles (a), z17 (~0.6 m/px) with z16 fill | Reprojected from Web-Mercator tiles to the DTM's equirectangular grid at 0.5 m/px, 35 chunks of 512 m. 0 gap pixels | `world/chunks/c*.jpg`, `world/overview.jpg` (minimap) |
+| Mount Sharp / crater backdrop | **USGS/DLR/ESA HRSC-MOLA Blended DEM Global 200 m v2** (Fergason et al. 2018), `planetarymaps.usgs.gov/mosaic/Mars/HRSC_MOLA_Blend/Mars_HRSC_MOLA_BlendDEM_Global_200mp_v2.tif` | Uncompressed int16, 106694 × 53347, 1-row strips; ±0.9° window (533 × 533 posts) read via `/vsicurl/` in ~1 s. Offset to the DTM by the median difference (−1.8 m). Sunk below the DTM near the AOI so it never pokes through. Planet curvature applied (d²/2R) | `world/backdrop.bin` |
+| Backdrop colour | **Viking MDIM 2.1 colour mosaic** via NASA Mars Trek WMTS, `trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/...`. **Max level is 7** (~330 m/px; level 8 returns 404) | Per-channel mean/std matched to the HiRISE mosaic; HiRISE overview pasted inside the AOI | `world/backdrop.jpg` |
+| Weather | REMS feed (e1) | Last 760 sols. The game picks the sol with the same Ls (season) in the latest Mars year as an analogue for the EVA date; daily min/max air temperature, pressure, sunrise/sunset, UV | `conditions/rems.json` |
+| Space weather | DONKI (e3) | 30-day snapshot (CME/SEP/GST/notifications). **On 2026-11-14 `DEMO_KEY` returned HTTP 429 for every call**, so the cached file holds the errors and the app shows space weather as UNKNOWN (not assumed quiet). Rerun with `NASA_API_KEY=<free key>` to fill it | `conditions/donki.json` |
+| Mars clock / sun | Mars24 algorithm (Allison & McEwen 2000; NASA GISS Mars24) | Ls, MSL sol, local true solar time, sun elevation/azimuth for any Earth date. **Validated against REMS**: sol number matches; Ls within 1.5° (REMS Ls is an integer); sunrise/sunset within 15 min (`src/core/sun.test.ts`) | `src/core/sun.ts` |
+
+Mars gravity 3.71–3.72 m/s² is from the NASA Mars Fact Sheet.
+
+Rocks are drawn procedurally: the density per 10 m cell follows the DTM roughness grid, but individual rocks are illustrative, not mapped boulders. Footprints, dust and wind are cosmetic.
+
 ## Open verification items
 - [x] Boxwork entrance sols: the waypoint data shows the climb from −3645 m (sol 4591) to −3631 m (sols 4602–4605), consistent with the reported 11 m climb. Still worth a glance at the NASA blog for the exact narrative
 - [ ] CRISM MTRDR footprint overlap with the route corridor (Phase 2)
 - [ ] Location of the clay-to-sulfate transition. It is outside this AOI, so the default story was changed to "Gediz Vallis + boxwork"
 - [ ] DONKI FLR endpoint status at build time
+- [ ] DONKI snapshot: refill with a personal NASA API key (DEMO_KEY rate-limited on 2026-11-14)

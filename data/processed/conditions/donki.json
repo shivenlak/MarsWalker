@@ -1,0 +1,15 @@
+{
+ "source": "NASA CCMC DONKI via api.nasa.gov",
+ "start": "2026-10-15",
+ "end": "2026-11-14",
+ "errors": {
+  "CME": "429 Client Error: Too Many Requests",
+  "SEP": "429 Client Error: Too Many Requests",
+  "GST": "429 Client Error: Too Many Requests",
+  "notifications": "429 Client Error: Too Many Requests"
+ },
+ "CME": null,
+ "SEP": null,
+ "GST": null,
+ "notifications": null
+}

@@ -36,6 +36,24 @@ Cell-level climb totals include some DTM noise (each 10 m step contributes its o
 - **Boxwork entrance stop** sits on a ridge whose 10 m cell exceeds the slope limit, so the router snaps it to the nearest passable cell and shows a warning. This is consistent with the rover's 11 m climb to reach it.
 - **POV images** are raw (uncalibrated) Navcam frames, auto-picked by camera pointing (near-horizontal, not looking back at the deck).
 
-## Not yet modelled (Phase 2)
+## Suit, point of no return, walk sim (game)
 
-Point of no return, suit consumables, radiation dose (constant is already in `config.ts`: 0.64 mSv/day, sourced), space weather, REMS temperature/daylight window, rover-assisted / heavy-load profiles.
+| Parameter | Value | Status | Reasoning |
+|---|---|---|---|
+| Suit consumables capacity | 8.5 nominal hours | **assumed** | Sized like an EMU/xEMU PLSS (~8 h EVA + 30 min reserve). O₂, water and battery share one budget so the HUD shows one bar |
+| Reserve on return | 30 min | **assumed** | EMU practice: never plan to arrive with an empty PLSS |
+| Consumption vs activity | rest 0.7×, flat walk 1.0×, +4× per unit uphill grade (cap 2.2×), downhill 0.9× | **assumed** | Shape follows Earth walking metabolic studies (e.g. Pandolf 1977). Magnitudes are not Mars-validated |
+| Point of no return | remaining − (A* walk home × climb factor) − reserve | design | Recomputed every 2 s with a fresh A* from the walker's position to base. Amber under 30 min of margin, red when negative |
+| Radiation dose | 0.64 mSv/sol | sourced | Hassler et al. 2014 (RAD). Quiet-sun average; SEP events not modelled |
+| Physical climb limit (sim) | 30° at 2 m scale | **assumed** | What the walker can physically step up in the sim. The *router* stays at 25° p90 (stricter), so planned routes never hit it |
+| Lope speed (Shift) | 1.5× walking | **assumed** | Apollo crews used a loping gait in low gravity |
+| Hop | 1.7 m/s take-off under 3.72 m/s² | sourced g / cosmetic speed | ~0.4 m apex, ~0.9 s airtime |
+| Air temperature curve | cosine from REMS daily min (sunrise) to max (14:00) | **assumed** | The REMS feed gives only daily extremes |
+| Weather analogue | REMS sol with the same Ls, latest Mars year | design | No live forecast exists; same-season data is the best offline proxy |
+| Projection scale | equirectangular clon0 → E–W distances 0.35% long at −4.8° | known | Matches the USGS DTM. Negligible for planning |
+| Survey tasks | 10 + 20 min = 30 min dwell | same as plan | Image the outcrop, then collect a sample |
+| Time warp | ×1 to ×60 | design | Sim clock, sun, consumables and dose all scale together |
+
+## Not yet modelled
+
+SEP/flare dose spikes, CRISM mineral layer, rover-assisted / heavy-load crew profiles, dust-storm opacity effects on lighting.

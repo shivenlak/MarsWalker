@@ -59,3 +59,22 @@ export const TOBLER = {
   offset: 0.05,
   source: "Tobler, W. (1993) 'Three presentations on geographical analysis and modeling', NCGIA TR 93-1. Shape only; flat speed is ASSUMED (see profile).",
 };
+
+/** Suit consumables (game + planner). Capacities are in "nominal hours": hours at metabolic factor 1.0. */
+export const SUIT = {
+  capacityH: {
+    value: 8.5,
+    source: "ASSUMED: sized like NASA xEMU/EMU PLSS (~8 h EVA + 30 min reserve). O2, water and battery share this budget for simplicity.",
+  } as Sourced<number>,
+  reserveH: { value: 0.5, source: "ASSUMED: 30 min reserve that must remain on return to base (EMU practice)." } as Sourced<number>,
+  metabolic: {
+    value: { rest: 0.7, flat: 1.0, perGradeUp: 4.0, max: 2.2, downhill: 0.9 },
+    source: "ASSUMED: consumption multiplier vs. activity. Resting 0.7, flat walking 1.0, +4 per unit uphill grade (capped 2.2). Shape follows Earth walking metabolic studies (e.g. Pandolf 1977), magnitudes not Mars-validated.",
+  } as Sourced<{ rest: number; flat: number; perGradeUp: number; max: number; downhill: number }>,
+};
+
+/** Physical constants used by the walk sim. */
+export const MARS = {
+  gravity: { value: 3.721, source: "NASA Mars Fact Sheet: surface gravity 3.71-3.72 m/s^2." } as Sourced<number>,
+  maxClimbDeg: { value: 30, source: "ASSUMED: steepest 2 m-scale slope a suited walker can physically step up in the sim (router limit is 25 deg p90)." } as Sourced<number>,
+};

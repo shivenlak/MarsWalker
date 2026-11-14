@@ -52,9 +52,14 @@ function snapToPassable(g: Grid, i: number, p: TerrainProfile, maxRing = 6): num
   return -1;
 }
 
+/** EVA plan: base -> each target -> back to base, with dwell time at every target. */
 export function planRoute(g: Grid, base: Stop, targets: Stop[], p: TerrainProfile): Route {
+  return routeThrough(g, [base, ...targets, base], p, targets.length);
+}
+
+/** A* through an ordered list of points (e.g. [player, target] for live navigation). */
+export function routeThrough(g: Grid, order: Stop[], p: TerrainProfile, dwellStops = 0): Route {
   const t0 = performance.now();
-  const order = [base, ...targets, base];
   const warnings: string[] = [];
   const cost = makeEdgeCost(g, p);
 
@@ -107,7 +112,7 @@ export function planRoute(g: Grid, base: Stop, targets: Stop[], p: TerrainProfil
 
   const sum = (f: (l: Leg) => number) => legs.reduce((a, l) => a + f(l), 0);
   const walkS = sum((l) => l.walkS);
-  const dwellS = targets.length * EVA.stopDwellMin.value * 60;
+  const dwellS = dwellStops * EVA.stopDwellMin.value * 60;
   return {
     points, legs, stops: order, warnings,
     totals: {
