@@ -1,0 +1,32 @@
+{
+ "cols": 238,
+ "rows": 333,
+ "cellSize": 10,
+ "originX": 8142800.492786024,
+ "originY": -282970.075189438,
+ "projection": "Equirectangular clon0, Mars 2000 sphere R=3396190 (x=R*lon, y=R*lat)",
+ "bounds": {
+  "west": 137.3739695522589,
+  "east": 137.41412159182119,
+  "south": -4.830055439369685,
+  "north": -4.773876325192162
+ },
+ "layers": [
+  "elev_m",
+  "slope_p90_deg",
+  "rough_rms_m"
+ ],
+ "notes": {
+  "elev_m": "mean of 1 m DEM posts in the cell (m, areoid)",
+  "slope_p90_deg": "90th percentile of 2 m-scale slopes in the cell",
+  "rough_rms_m": "RMS residual of 1 m posts about best-fit plane in the cell"
+ },
+ "stats": {
+  "elevMin": -3945.574462890625,
+  "elevMax": -3324.74755859375,
+  "nodataPct": 0.0,
+  "slopeP90Median": 16.741321563720703,
+  "roughMedian": 0.16374327792018795
+ },
+ "source": "USGS Astrogeology, MSL Gale DEM Mosaic 1m v3 (Calef & Parker 2016)"
+}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Marswalk - Gale EVA planner</title>
+  </head>
+  <body>
+    <header>
+      <h1>MARSWALK <small>Gale Crater &middot; Mount Sharp sulfate unit</small></h1>
+      <nav>
+        <button data-mode="planner">Planner</button>
+        <button data-mode="hud">HUD</button>
+      </nav>
+    </header>
+    <main>
+      <div id="planner" class="mode"></div>
+      <div id="hud" class="mode" hidden></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

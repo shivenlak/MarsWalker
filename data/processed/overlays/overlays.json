@@ -1,0 +1,24 @@
+{
+ "bounds": {
+  "west": 137.3739695522589,
+  "east": 137.41412159182119,
+  "south": -4.830055439369685,
+  "north": -4.773876325192162
+ },
+ "hillshade": {
+  "file": "overlays/hillshade.png",
+  "elevMin": -3876.13232421875,
+  "elevMax": -3341.255859375,
+  "source": "Derived from USGS MSL Gale DEM Mosaic 1m v3"
+ },
+ "slope": {
+  "file": "overlays/slope.png",
+  "rampDeg": [
+   0,
+   10,
+   20,
+   30
+  ],
+  "source": "Derived from USGS MSL Gale DEM Mosaic 1m v3 (2 m slope)"
+ }
+}
