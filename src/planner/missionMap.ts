@@ -4,10 +4,10 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { EVA, SUIT, WALKING } from "../core/config";
+import { EVA, ROVER, SUIT, WALKING, type TerrainProfile } from "../core/config";
 import { blockReason } from "../core/cost";
 import { lonLatToXY, xyToIdx } from "../core/grid";
-import { planRoute, type Leg, type Route } from "../core/route";
+import { nearestReachable, planRoute, routeThrough, type Leg, type Route, type Stop } from "../core/route";
 import { fmtClock, MARS_HOUR_S } from "../core/sun";
 import type { Overlays, StopInfo } from "../shared/data";
 import { loadOverlays, loadTraverse } from "../shared/data";
@@ -37,6 +37,8 @@ export class MissionMap {
   private bounds: L.LatLngBoundsExpression = [[0, 0], [0, 0]];
   private fitted = false;
   mode: "briefing" | "map" = "briefing";
+  profile: TerrainProfile = WALKING;
+  private extras = L.layerGroup();
   startHour = 9;
 
   onNavigate: ((p: LL, label: string) => void) | null = null;
@@ -55,6 +57,8 @@ export class MissionMap {
           <button class="mm-close" title="Back to EVA (M / Esc)">&times;</button>
         </div>
         <section class="mm-brief"></section>
+        <section><h3>Travel</h3><div class="seg mm-prof"><button data-p="walk" class="on">On foot</button><button data-p="buggy">Buggy</button></div>
+          <p class="note mm-prof-note"></p></section>
         <section><h3>Science stops</h3><div class="mm-stops"></div>
           <p class="note">Crew: ${WALKING.name}. Router limits: slope ${WALKING.maxSlopeDeg.value}&deg; ${sourceTag(WALKING.maxSlopeDeg)},
           roughness ${WALKING.maxRoughM.value} m ${sourceTag(WALKING.maxRoughM)}.</p></section>
@@ -81,10 +85,30 @@ export class MissionMap {
     const layers = await this.buildLayers(ov);
     this.renderLayerPanel(layers);
     this.routeLayer.addTo(this.map);
+    this.extras.addTo(this.map);
     this.liveLayer.addTo(this.map);
+    this.el.querySelectorAll<HTMLButtonElement>(".mm-prof button").forEach((b) => (b.onclick = () => this.setProfile(b.dataset.p === "buggy" ? ROVER : WALKING)));
     this.renderStopList();
     this.map.on("click", (e: L.LeafletMouseEvent) => this.readout(e.latlng));
     this.replan();
+  }
+
+  setProfile(p: TerrainProfile) {
+    this.profile = p;
+    this.el.querySelectorAll<HTMLButtonElement>(".mm-prof button").forEach((b) => b.classList.toggle("on", (b.dataset.p === "buggy") === (p === ROVER)));
+    this.el.querySelector(".mm-prof-note")!.innerHTML = p === ROVER
+      ? `A* with buggy limits: slope ${ROVER.maxSlopeDeg.value}&deg; ${sourceTag(ROVER.maxSlopeDeg)}, relief ${ROVER.maxRoughM.value} m ${sourceTag(ROVER.maxRoughM)}, ${ROVER.flatSpeedKmh.value} km/h ${sourceTag(ROVER.flatSpeedKmh)}. Sites the buggy can't reach get a park point; walk the rest.`
+      : `A* with walking limits (below).`;
+    this.replan();
+  }
+
+  /** Static markers: Curiosity's stopping points (found ones highlighted). */
+  setLandmarks(list: (LL & { name: string; found: boolean })[]) {
+    this.extras.clearLayers();
+    for (const l of list) {
+      L.circleMarker([l.lat, l.lon], { radius: 5, color: l.found ? "#fff" : "#ffd27a", weight: 2, fillOpacity: l.found ? 0.9 : 0.2 })
+        .bindTooltip(l.found ? l.name : "Curiosity stop (undiscovered)").addTo(this.extras);
+    }
   }
 
   show(mode: "briefing" | "map", info?: BriefingInfo) {
@@ -105,13 +129,14 @@ export class MissionMap {
   get open() { return !this.el.hidden; }
 
   // ---------- live overlays from the game ----------
-  setLive(p: LL & { headingDeg: number }, trail: LL[], nav: LL[], home: LL[]) {
+  setLive(p: LL & { headingDeg: number }, trail: LL[], nav: LL[], home: LL[], buggy?: LL) {
     if (this.el.hidden) return;
     this.liveLayer.clearLayers();
     const ll = (a: LL[]) => a.map((q) => [q.lat, q.lon] as [number, number]);
     if (home.length > 1) L.polyline(ll(home), { color: "#ff5a3c", weight: 3, dashArray: "6 6" }).addTo(this.liveLayer);
     if (trail.length > 1) L.polyline(ll(trail), { color: "#fff", weight: 3, opacity: 0.9 }).addTo(this.liveLayer);
     if (nav.length > 1) L.polyline(ll(nav), { color: "#00e5ff", weight: 5, opacity: 0.95 }).addTo(this.liveLayer);
+    if (buggy) L.marker([buggy.lat, buggy.lon], { icon: L.divIcon({ className: "map-buggy", html: "&#9635;", iconSize: [20, 20] }) }).bindTooltip("Buggy").addTo(this.liveLayer);
     this.player.setLatLng([p.lat, p.lon]).addTo(this.liveLayer);
     const el = this.player.getElement()?.querySelector("i") as HTMLElement | null;
     if (el) el.style.transform = `rotate(${p.headingDeg}deg)`;
@@ -181,9 +206,10 @@ export class MissionMap {
   private renderStopList() {
     const el = this.el.querySelector(".mm-stops")!;
     const science = store.stops.filter((s) => s.kind === "science");
-    science.forEach((s) => this.included.add(s.id));
+    const DEFAULT = new Set(["gediz", "boxwork_entry", "boxwork_main"]);
+    science.forEach((s) => { if (DEFAULT.has(s.id)) this.included.add(s.id); });
     el.innerHTML = science.map((s) => `
-      <label class="stop-row"><input type="checkbox" data-id="${s.id}" checked>
+      <label class="stop-row"><input type="checkbox" data-id="${s.id}" ${DEFAULT.has(s.id) ? "checked" : ""}>
         <span class="pin-inline">${store.stops.indexOf(s)}</span> ${s.name}</label>`).join("");
     el.querySelectorAll<HTMLInputElement>("input").forEach((cb) => {
       cb.onchange = () => { cb.checked ? this.included.add(cb.dataset.id!) : this.included.delete(cb.dataset.id!); this.replan(); };
@@ -193,7 +219,25 @@ export class MissionMap {
   private replan() {
     const base = store.stops.find((s) => s.kind === "base")!;
     const targets = store.stops.filter((s) => s.kind === "science" && this.included.has(s.id));
-    const r = targets.length ? planRoute(store.grid!, base, targets, WALKING) : null;
+    let r: Route | null = null;
+    if (targets.length) {
+      if (this.profile === ROVER) {
+        // drive to each site, or to the closest point the buggy can reach (then walk)
+        const order: Stop[] = [base];
+        const notes: string[] = [];
+        for (const t of targets) {
+          const direct = routeThrough(store.grid!, [order[order.length - 1], t], ROVER);
+          if (direct.legs.length) { order.push(t); continue; }
+          const park = nearestReachable(store.grid!, base, t, ROVER);
+          if (park) { order.push({ ...park.stop, name: `${t.name.split(" - ")[0]} (park, walk ${park.gapM.toFixed(0)} m)` }); notes.push(`${t.name.split(" - ")[0]}: buggy parks ${park.gapM.toFixed(0)} m away, walk the rest`); }
+        }
+        order.push(base);
+        r = routeThrough(store.grid!, order, ROVER, targets.length);
+        r.warnings = [...notes, ...r.warnings.filter((w) => !w.startsWith("No safe path"))];
+      } else {
+        r = planRoute(store.grid!, base, targets, WALKING);
+      }
+    }
     setRoute(r);
     this.drawRoute(r);
     this.renderBudget(r);
@@ -214,7 +258,10 @@ export class MissionMap {
     });
   }
 
-  private stopName(id: string) { return store.stops.find((s) => s.id === id)?.name.split(" - ")[0] ?? id; }
+  private stopName(id: string) {
+    const s = store.stops.find((q) => q.id === id) ?? store.route?.stops.find((q) => q.id === id);
+    return s?.name.split(" - ")[0] ?? id;
+  }
 
   private showLeg(r: Route, leg: Leg, i: number) {
     const pts = r.points.slice(leg.startIndex, leg.endIndex + 1);
@@ -261,7 +308,7 @@ export class MissionMap {
     const g = store.grid!;
     const i = xyToIdx(g, lonLatToXY({ lon: ll.lng, lat: ll.lat }));
     if (i < 0) { this.detail(`<p class="note">Outside the DTM survey area.</p>`); return; }
-    const why = blockReason(g, i, WALKING);
+    const why = blockReason(g, i, this.profile);
     let themis = "";
     const t = this.themis;
     if (t) {
@@ -304,19 +351,19 @@ export class MissionMap {
       <div class="kpis">
         <div><span>${fmtDist(t.distM)}</span>distance (3D)</div>
         <div><span>+${t.climbM.toFixed(0)} / -${t.descentM.toFixed(0)} m</span>climb / descent</div>
-        <div><span>${fmtDur(t.walkS)}</span>walking</div>
+        <div><span>${fmtDur(t.walkS)}</span>${this.profile === ROVER ? "driving" : "walking"}</div>
         <div class="${over ? "bad" : ""}"><span>${fmtDur(t.evaS)}</span>total EVA</div>
       </div>
       <table class="legs"><tr><th>Leg</th><th>Dist</th><th>Climb</th><th>Time</th></tr>
         ${r.legs.map((l, i) => `<tr data-leg="${i}"><td>${this.stopName(l.fromId)} &rarr; ${this.stopName(l.toId)}</td><td>${fmtDist(l.distM)}</td>
           <td>+${l.climbM.toFixed(0)} m</td><td>${fmtDur(l.walkS)}</td></tr>`).join("")}
       </table>
-      <p class="note">Pace ${WALKING.flatSpeedKmh.value} km/h on flat, Tobler-shaped on grades ${sourceTag(WALKING.flatSpeedKmh)} ·
+      <p class="note">${this.profile === ROVER ? `Buggy ${ROVER.flatSpeedKmh.value} km/h on flat, slower on grades ${sourceTag(ROVER.flatSpeedKmh)}` : `Pace ${WALKING.flatSpeedKmh.value} km/h on flat, Tobler-shaped on grades ${sourceTag(WALKING.flatSpeedKmh)}`} ·
         ${EVA.stopDwellMin.value} min per stop ${sourceTag(EVA.stopDwellMin)} · EVA limit ${EVA.maxDurationH.value} h ${sourceTag(EVA.maxDurationH)} ·
         suit ${SUIT.capacityH.value} h incl. ${SUIT.reserveH.value * 60} min reserve ${sourceTag(SUIT.capacityH)}.
         Back at base ~${fmtClock(endH)} local (Mars hours ≈ Earth hours × 1.027).</p>
       ${r.warnings.map((w) => `<p class="warn">&#9888; ${w}</p>`).join("")}
-      <p class="src">A* over ${store.grid!.cols}&times;${store.grid!.rows} cells (${store.grid!.cellSize} m) in ${r.computeMs.toFixed(0)} ms. Click a leg on the map or below for its profile.</p>`;
+      <p class="src">A* (${this.profile.name}) over ${store.grid!.cols}&times;${store.grid!.rows} cells (${store.grid!.cellSize} m) in ${r.computeMs.toFixed(0)} ms. Click a leg on the map or below for its profile.</p>`;
     el.querySelectorAll<HTMLTableRowElement>("tr[data-leg]").forEach((tr) => {
       tr.onclick = () => { const i = +tr.dataset.leg!; this.selectedLeg = i; this.drawRoute(r); this.showLeg(r, r.legs[i], i); };
     });

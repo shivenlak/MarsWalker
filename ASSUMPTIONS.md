@@ -54,6 +54,37 @@ Cell-level climb totals include some DTM noise (each 10 m step contributes its o
 | Survey tasks | 10 + 20 min = 30 min dwell | same as plan | Image the outcrop, then collect a sample |
 | Time warp | ×1 to ×60 | design | Sim clock, sun, consumables and dose all scale together |
 
+## Buggy (LRV-class crew rover)
+
+| Parameter | Value | Status | Reasoning |
+|---|---|---|---|
+| Top speed | 13 km/h | sourced | Apollo LRV Operations Handbook |
+| Planning speed on flat | 10 km/h | sourced | Apollo 15–17 traverse speeds (~7–10 km/h) |
+| Range | 90 km | sourced | LRV design range 92 km (two 36 V batteries) |
+| Wheelbase / track / wheel | 2.3 m / 1.8 m / 0.82 m | sourced | LRV dimensions |
+| Router slope limit | 20° | **assumed** | LRV designed for 25°; margin for loose Mars soil |
+| Router relief limit | 0.3 m RMS | sourced (obstacle height) | LRV crossed ~30 cm obstacles |
+| Speed vs grade | linear down to 40% at the slope limit | **assumed** | |
+| Rollover | 45° | sourced/assumed | LRV handbook stability limit |
+| Traction loss | > limit + 5° | **assumed** | Wheels slip and the buggy slides back |
+| Park-and-walk | A* to the closest reachable cell (BFS of the buggy's passable region) | design | On real terrain the buggy cannot climb onto the boxwork ridge: it parks 35 m short (`real.test.ts`) |
+
+## Survival & game hazards
+
+| Parameter | Value | Status | Reasoning |
+|---|---|---|---|
+| Suit heater threshold | below −40 °C | **assumed** | Heater starts drawing power |
+| Heater load | +1.2% consumption per °C below threshold | **assumed** | Night at −73 °C (REMS) → about +40% |
+| Safe landing speed | 4 m/s (~2.1 m fall on Mars) | **assumed** | Above it: 14 health per m/s |
+| Oxygen-out | death after 60 s sim time | **assumed (forgiving)** | Real useful consciousness is shorter |
+| Emergency shelter | 30 h of O₂/heat, 1 per EVA | **assumed** | Lets a crew survive a night away from base |
+| Solar particle event | dose rate ×20 for 2 h, 20-min warning | **illustrative** | RAD has seen SEP events raise the surface dose (e.g. Sept 2017). The multiplier is exaggerated for play; shelter cuts it to 30%, the habitat to 0 |
+| Dust devils | 10:00–16:30 local, dust on the visor, a small push | **illustrative** | Curiosity has imaged dust devils in Gale. Their size and frequency here are for play |
+| Sample bag | 6 kg | **assumed** | Site cores 1.2 kg; field specimens 0.2–0.7 kg |
+| Bag weight | +1/30 metabolic factor per kg | **assumed** | |
+| Throwable rocks | ballistic under 3.72 m/s², bounce 0.3 | sourced g / cosmetic | Throws fly ~2.6× farther than on Earth |
+| Field specimen types | by nearest science site | design | The descriptions follow the cited science; the individual stones are game items |
+
 ## Not yet modelled
 
 SEP/flare dose spikes, CRISM mineral layer, rover-assisted / heavy-load crew profiles, dust-storm opacity effects on lighting.

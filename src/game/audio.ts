@@ -9,6 +9,24 @@ export class SuitAudio {
   private noise!: AudioBuffer;
   private breathT = 0;
   muted = false;
+  private motorOsc: OscillatorNode | null = null;
+  private motorGain: GainNode | null = null;
+
+  /** Electric drive whine felt through the seat: level 0..1. */
+  motor(level: number) {
+    if (!this.ctx) return;
+    if (!this.motorOsc) {
+      this.motorOsc = this.ctx.createOscillator();
+      this.motorOsc.type = "sawtooth";
+      const f = this.ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 500;
+      this.motorGain = this.ctx.createGain(); this.motorGain.gain.value = 0;
+      this.motorOsc.connect(f).connect(this.motorGain).connect(this.master);
+      this.motorOsc.start();
+    }
+    const t = this.ctx.currentTime;
+    this.motorOsc.frequency.setTargetAtTime(60 + level * 220, t, 0.1);
+    this.motorGain!.gain.setTargetAtTime(level > 0.01 ? 0.015 + level * 0.03 : 0, t, 0.15);
+  }
 
   start() {
     if (this.ctx) return;

@@ -15,6 +15,7 @@ export interface TerrainProfile {
   roughWeight: number;            // cost multiplier: 1 + roughWeight * (rough / maxRough)
   uphillMetresPerMetre: Sourced<number>; // extra flat-equivalent metres per metre climbed
   flatSpeedKmh: Sourced<number>;  // walking speed on flat ground
+  speedModel?: "tobler" | "vehicle"; // how speed falls off with grade (default tobler = walking)
 }
 
 export const WALKING: TerrainProfile = {
@@ -37,6 +38,33 @@ export const WALKING: TerrainProfile = {
     value: 3.0,
     source: "ASSUMED: suited EVA walking pace, below Earth's ~5 km/h; Apollo lunar walking traverses were typically ~2-3 km/h.",
   },
+};
+
+/** Unpressurised crew buggy, numbers from the Apollo Lunar Roving Vehicle (the only crewed off-world rover flown). */
+export const ROVER: TerrainProfile = {
+  name: "Crew buggy (LRV-class), 2 crew",
+  maxSlopeDeg: {
+    value: 20,
+    source: "ASSUMED: kept below the Apollo LRV's 25 deg design slope capability (LRV Operations Handbook, NASA/Boeing 1971) for margin on loose Mars soil.",
+  },
+  maxRoughM: {
+    value: 0.3,
+    source: "Apollo LRV obstacle-crossing height ~30 cm (LRV Operations Handbook); used as the RMS relief limit per 10 m cell.",
+  },
+  slopeWeight: 4,
+  roughWeight: 3,
+  uphillMetresPerMetre: { value: 3, source: "ASSUMED: climbing costs a vehicle less than a walker (energy, not legs)." },
+  flatSpeedKmh: {
+    value: 10,
+    source: "Apollo LRV top speed ~13 km/h, typical traverse speeds ~7-10 km/h (Apollo 15-17 mission reports); 10 km/h used on flat.",
+  },
+  speedModel: "vehicle",
+};
+
+export const BUGGY = {
+  maxSpeedKmh: { value: 13, source: "Apollo LRV maximum speed ~13 km/h (LRV Operations Handbook)." } as Sourced<number>,
+  rangeKm: { value: 90, source: "Apollo LRV design range 92 km on two 36 V silver-zinc batteries (LRV Operations Handbook)." } as Sourced<number>,
+  rolloverDeg: { value: 45, source: "ASSUMED: static rollover angle for a wide, low buggy (LRV handbook gives 45 deg stability limits)." } as Sourced<number>,
 };
 
 /** EVA-level constants. */
@@ -77,4 +105,15 @@ export const SUIT = {
 export const MARS = {
   gravity: { value: 3.721, source: "NASA Mars Fact Sheet: surface gravity 3.71-3.72 m/s^2." } as Sourced<number>,
   maxClimbDeg: { value: 30, source: "ASSUMED: steepest 2 m-scale slope a suited walker can physically step up in the sim (router limit is 25 deg p90)." } as Sourced<number>,
+};
+
+/** Survival / hazard model used by the game (see ASSUMPTIONS.md). */
+export const SURVIVAL = {
+  heaterOnBelowC: { value: -40, source: "ASSUMED: below this outside air temperature the suit heater starts drawing extra power." } as Sourced<number>,
+  heaterPerDegree: { value: 0.012, source: "ASSUMED: +1.2% consumption per degree C below the heater threshold (night at -80 C ~ +50%)." } as Sourced<number>,
+  safeImpactMs: { value: 4, source: "ASSUMED: landing speed a suited human absorbs safely (~2.1 m fall on Mars, g = 3.72)." } as Sourced<number>,
+  damagePerMs: { value: 14, source: "ASSUMED: health lost per m/s of impact speed above the safe limit." } as Sourced<number>,
+  hypoxiaS: { value: 60, source: "ASSUMED (game-forgiving): seconds of sim time from empty O2 to loss of life; real useful consciousness is shorter." } as Sourced<number>,
+  shelterHours: { value: 30, source: "ASSUMED: emergency shelter kit supplies (O2, heat) for one Mars night plus margin." } as Sourced<number>,
+  sepDoseMultiplier: { value: 20, source: "ILLUSTRATIVE: solar particle event raises the surface dose rate for a few hours; RAD has measured surface dose doubling (Sept 2017 event) - this game exaggerates it for play." } as Sourced<number>,
 };

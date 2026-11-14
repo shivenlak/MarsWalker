@@ -81,18 +81,23 @@ export class Player {
       this.z += hz * step;
       this.odometer += step;
     }
+    if (this.collide) { const q = { x: this.x, z: this.z }; if (this.collide(q)) { this.x = q.x; this.z = q.z; } }
     const ground = this.terrain.heightAt(this.x, this.z);
     if (ground > this.lastY) this.climbed += ground - this.lastY;
     this.lastY = ground;
 
-    // hop (cosmetic, real time, Mars gravity)
+    // vertical: hops and falls under Mars gravity (real time). Walking off a ledge = free fall.
     if (input.hop && !this.airborne && !frozen) { this.vy = 1.7; this.airborne = true; }
     if (this.airborne) {
       this.vy -= MARS.gravity.value * dtReal;
-      this.hopY += this.vy * dtReal;
-      if (this.hopY <= 0) { this.hopY = 0; this.vy = 0; this.airborne = false; this.onLand?.(); }
+      this.y += this.vy * dtReal;
+      if (this.y <= ground) { const impact = -this.vy; this.y = ground; this.vy = 0; this.airborne = false; this.onLand?.(impact); }
+    } else {
+      const ledge = Math.max(0.45, step * 0.75);
+      if (this.y - ground > ledge) { this.airborne = true; this.vy = 0; }
+      else this.y = ground;
     }
-    this.y = ground + this.hopY;
+    this.hopY = Math.max(0, this.y - ground);
 
     // pose the model: stand on the ground, face heading, lean into climbs
     const r = this.astro.root;
@@ -102,7 +107,8 @@ export class Player {
     this.astro.animate(animSpeed, dtReal, this.airborne, Math.max(-0.15, Math.min(this.grade * 0.8, 0.35)), this.kneel);
   }
 
-  onLand: (() => void) | null = null;
+  onLand: ((impactMs: number) => void) | null = null;
+  collide: ((p: { x: number; z: number }) => boolean) | null = null;
 
   get pos() { return new THREE.Vector3(this.x, this.y, this.z); }
 }

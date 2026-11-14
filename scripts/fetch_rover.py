@@ -49,7 +49,58 @@ STOPS = [
         "lookFor": "Criss-crossing ridge network, ridge crests with lighter mineral veins.",
         "imgSols": [4709, 4715],
     },
+    {
+        "id": "mineral_king", "kind": "science", "name": "Mineral King drill site", "sol": 4102,
+        "what": "Gray rock block drilled as Curiosity's 40th successful drill hole (sols ~4107-4115, Feb-Mar 2024), beside the Gediz Vallis ridge.",
+        "why": "The rock was so hard the hole came out shallow; a test of how cemented the sulfate-bearing layers are, with the chaotic Gediz Vallis ridge deposit in view.",
+        "evidence": "NASA Curiosity blogs 'Sols 4107-4109: Drilling Mineral King', 'Sols 4110-4111: Mining into Mineral King', 'Sols 4114-4115: Bingo! 40th successful drill hole'.",
+        "lookFor": "Gray, fine-grained bedrock blocks; the Gediz Vallis ridge (debris pile) on the skyline.",
+        "imgSols": [4102, 4112],
+    },
+    {
+        "id": "kings_canyon", "kind": "science", "name": "Kings Canyon drill site", "sol": 4255,
+        "what": "Drill site inside the Gediz Vallis channel (Aug 2024); Curiosity marked its 12th landing anniversary here (sol 4265, Aug 6 2024).",
+        "why": "Samples from the channel floor went to CheMin and SAM (evolved gas analysis) to compare with the sulfur-rich debris upstream.",
+        "evidence": "NASA Curiosity blogs 'Sols 4263-4265: A Royal Birthday Celebration at Kings Canyon', 'Sols 4270-4272: Sample for SAM', 'Sols 4280-4281: Last Call at Kings Canyon'.",
+        "lookFor": "Channel-floor bedrock between debris-flow boulders; the walls of Gediz Vallis.",
+        "imgSols": [4256, 4270],
+    },
+    {
+        "id": "altadena", "kind": "science", "name": "Altadena drill site", "sol": 4560,
+        "what": "Curiosity's 43rd drill hole (June 2025) at the edge of the boxwork unit.",
+        "why": "Baseline chemistry of the bedrock just before the boxwork ridges, to compare with samples from ridges and hollows.",
+        "evidence": "NASA Curiosity blogs 'Sols 4561-4562: Prepping to Drill at Altadena', 'Sols 4566-4567: Drilling Success', 'Sols 4568-4569: A Close Look at the Altadena Drill Hole and Tailings'.",
+        "lookFor": "Flat layered bedrock with the first low boxwork ridges ahead to the south.",
+        "imgSols": [4560, 4570],
+    },
+    {
+        "id": "basque_lakes", "kind": "science", "name": "Basque Lakes drill site", "sol": 5021,
+        "what": "Recent drill campaign south of the boxwork (rover parked sols ~5021-5041, mid-2026).",
+        "why": "Newest terrain on the climb up Mount Sharp; the team gathered context imaging around the drill hole while operating on limited power.",
+        "evidence": "NASA Curiosity blog 'Sols 5029-5035: Back in the Lab' (Basque Lakes drill hole); MSL waypoints sols 5021-5041.",
+        "lookFor": "Pale layered rock rising toward the higher sulfate unit; Mount Sharp's upper slopes beyond.",
+        "imgSols": [5021, 5035],
+    },
+    {
+        "id": "curiosity", "kind": "rover", "name": "Curiosity rover (latest position)", "sol": 5073,
+        "what": "Where NASA's Curiosity rover was parked at the end of the latest published drive (sol 5073).",
+        "why": "Curiosity has driven over every science stop on this map since 2024; its cameras supplied the photos in this game.",
+        "evidence": "MSL waypoints feed (NASA MMGIS), latest drive end point in the data.",
+        "lookFor": "A six-wheeled, car-sized rover with a mast; fresh wheel tracks behind it.",
+        "imgSols": [5069, 5073],
+    },
 ]
+
+# Gameplay sample each science stop yields (descriptions follow the cited science; the sample itself is a game item).
+SAMPLES = {
+    "gediz": ("Sulfur-bearing stone", "Light-toned stone from the Gediz Vallis debris: Curiosity found pure elemental sulfur in this field."),
+    "boxwork_entry": ("Ridge vein fragment", "Mineral-cemented fracture fill from a boxwork ridge."),
+    "boxwork_main": ("Ridge/hollow core pair", "Paired cores from a boxwork ridge and the hollow beside it (Curiosity drilled 'Nevado Sajama' on a ridge, sol ~4718)."),
+    "mineral_king": ("Hard gray bedrock core", "Strongly cemented sulfate-unit rock - the drill barely got in."),
+    "kings_canyon": ("Channel-floor drill powder", "Gediz Vallis channel bedrock, for comparison with the sulfur debris."),
+    "altadena": ("Boxwork-edge bedrock core", "Baseline bedrock just outside the boxwork unit."),
+    "basque_lakes": ("Upper-unit drill powder", "Newest layers on the climb up Mount Sharp."),
+}
 
 
 def in_aoi(lon, lat, pad=0.0):
@@ -145,7 +196,40 @@ def main():
     snap_stops(all_wp)
     for s in STOPS:
         s["images"] = pov_images(s)
+        if s["id"] in SAMPLES:
+            s["sample"] = {"name": SAMPLES[s["id"]][0], "about": SAMPLES[s["id"]][1]}
     write_json(OUT / "stops.json", STOPS)
+    landmarks(all_wp)
+
+
+def landmarks(all_wp, spacing_m=150, n_max=16):
+    """'Curiosity was here' discoveries: real drive end-points spread over the AOI, each with a Navcam frame from that sol."""
+    import math
+    from common import R_MARS
+    def xy(lon, lat):
+        return R_MARS * math.radians(lon), R_MARS * math.radians(lat)
+    taken = [xy(s["lon"], s["lat"]) for s in STOPS]
+    wps = sorted([f for f in all_wp if in_aoi(*f["geometry"]["coordinates"][:2])], key=lambda f: f["properties"]["sol"])
+    out = []
+    for f in wps:
+        p = f["properties"]
+        q = xy(p["lon"], p["lat"])
+        if any(math.dist(q, t) < spacing_m for t in taken):
+            continue
+        lm = {"id": f"wp{p['sol']}", "kind": "landmark", "name": f"Curiosity, sol {p['sol']}", "sol": p["sol"],
+              "lon": p["lon"], "lat": p["lat"], "elev": p["elev_geoid"],
+              "waypoint": f"site {p['site']} drive {p['drive']} (sol {p['sol']})",
+              "odometerKm": round(p["dist_total_m"] / 1000, 2) if p.get("dist_total_m") else None,
+              "imgSols": [p["sol"], p["sol"] + 1]}
+        imgs = pov_images(lm, n=1)
+        if not imgs:
+            continue
+        lm["images"] = imgs
+        out.append(lm)
+        taken.append(q)
+        if len(out) >= n_max:
+            break
+    write_json(OUT / "landmarks.json", out)
 
 
 if __name__ == "__main__":

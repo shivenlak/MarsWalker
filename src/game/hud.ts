@@ -17,6 +17,11 @@ export interface HudFrame {
   navDist: number | null; navTime: number | null; navName: string;
   autopilot: boolean; mode: "third" | "first";
   odometer: number;
+  health: number; bagKg: number; bagN: number; bagMax: number;
+  alerts: { text: string; level: "info" | "caution" | "danger" }[];
+  vehicle: null | { speedKmh: number; battery: number; pitch: number; roll: number; slipping: boolean };
+  overlay: string;
+  modeLabel: string;
 }
 
 export interface MinimapData {
@@ -27,6 +32,7 @@ export interface MinimapData {
   trail: { x: number; z: number }[];
   stops: { x: number; z: number; label: string; state: string }[];
   scan: { x: number; z: number } | null;
+  pois: { x: number; z: number; kind: "landmark" | "landmark-found" | "buggy" | "hab" | "shelter" | "specimen" }[];
 }
 
 export class Hud {
@@ -63,21 +69,31 @@ export class Hud {
       </div>
       <div class="g-panel g-vitals">
         <div class="g-title">SUIT</div>
+        <div class="vbar"><label>HEALTH</label><div class="bar"><i class="b-hp"></i></div></div>
         <div class="vbar"><label>O&#8322; / H&#8322;O / PWR</label><div class="bar"><i class="b-cons"></i></div><span class="v-cons"></span></div>
         <div class="vrow"><label>RETURN MARGIN</label><span class="v-ret"></span></div>
         <div class="vrow"><label>DOSE</label><span class="v-dose"></span></div>
         <div class="vrow"><label>EXT TEMP</label><span class="v-temp"></span></div>
         <div class="vrow"><label>GRADE / SLOPE</label><span class="v-slope"></span></div>
         <div class="vrow"><label>PACE</label><span class="v-speed"></span></div>
+        <div class="vrow"><label>SAMPLE BAG</label><span class="v-bag"></span></div>
       </div>
+      <div class="g-panel g-vehicle"><div class="g-title">BUGGY</div>
+        <div class="veh-speed"><b class="vs"></b><small>km/h</small></div>
+        <div class="vbar"><label>BATTERY</label><div class="bar"><i class="b-batt"></i></div></div>
+        <div class="vrow"><label>PITCH / ROLL</label><span class="v-att"></span></div>
+      </div>
+      <div class="g-alerts"></div>
+      <div class="g-overlay"></div>
       <div class="g-nav"></div>
       <div class="g-prompt"></div>
       <div class="g-toast"></div>
       <div class="g-warn"></div>
       <div class="g-keys">
-        <span><b>WASD</b> walk</span><span><b>Shift</b> lope</span><span><b>Space</b> hop</span>
-        <span><b>F</b> autopilot</span><span><b>E</b> interact</span><span><b>V</b> visor</span>
-        <span><b>M</b> map</span><span><b>[ ]</b> time warp</span><span><b>H</b> path home</span><span><b>Click</b> scan</span>
+        <span><b>WASD</b> move</span><span><b>Shift</b> lope</span><span><b>Space</b> hop/brake</span>
+        <span><b>E</b> interact</span><span><b>F</b> autopilot</span><span><b>V</b> view</span><span><b>G</b> grab/throw</span>
+        <span><b>T</b> data layer</span><span><b>Q</b> scanner</span><span><b>L</b> lamps</span><span><b>B</b> shelter</span>
+        <span><b>M</b> map</span><span><b>J</b> journal</span><span><b>[ ]</b> warp</span><span><b>Esc</b> menu</span>
       </div>`;
     root.appendChild(this.el);
     this.compass = this.q("canvas.g-compass");
@@ -123,6 +139,28 @@ export class Hud {
     sl.textContent = `${(f.grade * 100).toFixed(0)}% · ${f.slopeDeg.toFixed(0)}°`;
     sl.className = `v-slope ${f.slopeDeg > 25 ? "danger" : f.slopeDeg > 15 ? "caution" : ""}`;
     this.q(".v-speed").textContent = `${(f.speed * 3.6).toFixed(1)} km/h · ×${f.warp}`;
+    const hp = this.q<HTMLElement>(".b-hp");
+    hp.style.width = `${f.health.toFixed(0)}%`;
+    hp.className = `b-hp ${f.health < 30 ? "danger" : f.health < 60 ? "caution" : ""}`;
+    this.q(".v-bag").textContent = `${f.bagN} · ${f.bagKg.toFixed(1)} / ${f.bagMax} kg`;
+    const veh = this.q<HTMLElement>(".g-vehicle");
+    veh.hidden = !f.vehicle;
+    if (f.vehicle) {
+      this.q(".vs").textContent = f.vehicle.speedKmh.toFixed(1);
+      const b = this.q<HTMLElement>(".b-batt");
+      b.style.width = `${(f.vehicle.battery * 100).toFixed(0)}%`;
+      b.className = `b-batt ${f.vehicle.battery < 0.15 ? "danger" : ""}`;
+      const att = this.q<HTMLElement>(".v-att");
+      att.textContent = `${f.vehicle.pitch.toFixed(0)}° / ${f.vehicle.roll.toFixed(0)}°${f.vehicle.slipping ? " · SLIP" : ""}`;
+      att.className = `v-att ${Math.max(Math.abs(f.vehicle.pitch), Math.abs(f.vehicle.roll)) > 25 || f.vehicle.slipping ? "danger" : ""}`;
+    }
+    const al = this.q(".g-alerts");
+    const html = f.alerts.map((a) => `<div class="al ${a.level}">${a.text}</div>`).join("");
+    if (al.innerHTML !== html) al.innerHTML = html;
+    const ov = this.q(".g-overlay");
+    if (ov.innerHTML !== f.overlay) ov.innerHTML = f.overlay;
+    const ttl = this.q(".g-mission .g-title");
+    if (!ttl.textContent?.startsWith(f.modeLabel)) ttl.firstChild!.textContent = f.modeLabel + " ";
     // nav
     this.q(".g-nav").innerHTML = f.navDist == null ? "" :
       `<div class="nn">${f.navName}</div><div class="nd">${fmtDist(f.navDist)} <small>· ${fmtDur(f.navTime ?? 0)} walk</small></div>
@@ -250,6 +288,18 @@ export class Hud {
       g.beginPath(); g.arc(0, 0, 11, 0, Math.PI * 2); g.fill(); g.stroke();
       g.fillStyle = "#000"; g.font = "700 13px Rajdhani, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
       g.fillText(s.label, 0, 1);
+      g.restore();
+    }
+    for (const p of d.pois) {
+      g.save();
+      g.translate(p.x, p.z);
+      g.rotate(-rot);
+      g.scale(1 / k, 1 / k);
+      if (p.kind === "buggy") { g.fillStyle = "#ffd27a"; g.fillRect(-7, -5, 14, 10); g.strokeStyle = "#000"; g.strokeRect(-7, -5, 14, 10); }
+      else if (p.kind === "hab") { g.fillStyle = "#e6e1d6"; g.beginPath(); g.arc(0, 0, 8, 0, Math.PI * 2); g.fill(); g.fillStyle = "#00e5ff"; g.fillRect(-2, -2, 4, 4); }
+      else if (p.kind === "shelter") { g.fillStyle = "#ff8a3d"; g.beginPath(); g.arc(0, 0, 6, 0, Math.PI * 2); g.fill(); }
+      else if (p.kind === "specimen") { g.strokeStyle = "#ffe066"; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 5, 0, Math.PI * 2); g.stroke(); }
+      else { g.fillStyle = p.kind === "landmark-found" ? "#fff" : "rgba(255,210,122,0.9)"; g.beginPath(); g.moveTo(0, -6); g.lineTo(5, 0); g.lineTo(0, 6); g.lineTo(-5, 0); g.fill(); }
       g.restore();
     }
     if (d.scan) {

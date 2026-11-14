@@ -41,9 +41,13 @@ export function makeHeuristic(g: Grid, goal: number) {
   };
 }
 
-/** Walking speed (m/s) for a signed grade dz/dx, Tobler-shaped, flat = profile speed. */
+/** Speed (m/s) for a signed grade dz/dx. Walking: Tobler-shaped. Vehicle: linear slow-down to 40% at the slope limit. */
 export function walkSpeed(grade: number, p: TerrainProfile): number {
   const flat = (p.flatSpeedKmh.value * 1000) / 3600;
+  if (p.speedModel === "vehicle") {
+    const deg = (Math.atan(Math.abs(grade)) * 180) / Math.PI;
+    return flat * Math.max(0.4, 1 - 0.6 * (deg / p.maxSlopeDeg.value));
+  }
   const f = Math.exp(-TOBLER.k * Math.abs(grade + TOBLER.offset)) / Math.exp(-TOBLER.k * TOBLER.offset);
   return flat * f;
 }

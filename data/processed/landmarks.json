@@ -1,0 +1,386 @@
+[
+ {
+  "id": "wp3938",
+  "kind": "landmark",
+  "name": "Curiosity, sol 3938",
+  "sol": 3938,
+  "lon": 137.4022262,
+  "lat": -4.77408828,
+  "elev": -3777.65,
+  "waypoint": "site 103 drive 2682 (sol 3938)",
+  "odometerKm": 31.14,
+  "imgSols": [
+   3938,
+   3939
+  ],
+  "images": [
+   {
+    "file": "pov/wp3938/0.jpg",
+    "sol": 3938,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/03938/opgs/edr/ncam/NLB_747096043EDR_F1032682NCAM00273M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp3955",
+  "kind": "landmark",
+  "name": "Curiosity, sol 3955",
+  "sol": 3955,
+  "lon": 137.4041735,
+  "lat": -4.77577015,
+  "elev": -3770.38,
+  "waypoint": "site 104 drive 892 (sol 3955)",
+  "odometerKm": 31.3,
+  "imgSols": [
+   3955,
+   3956
+  ],
+  "images": [
+   {
+    "file": "pov/wp3955/0.jpg",
+    "sol": 3956,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/03956/opgs/edr/ncam/NRB_748681319EDR_S1040892NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4074",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4074",
+  "sol": 4074,
+  "lon": 137.4060345,
+  "lat": -4.77782237,
+  "elev": -3755.65,
+  "waypoint": "site 105 drive 1994 (sol 4074)",
+  "odometerKm": 31.52,
+  "imgSols": [
+   4074,
+   4075
+  ],
+  "images": [
+   {
+    "file": "pov/wp4074/0.jpg",
+    "sol": 4074,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04074/opgs/edr/ncam/NLB_759163769EDR_F1051994NCAM00271M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4151",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4151",
+  "sol": 4151,
+  "lon": 137.4075149,
+  "lat": -4.78273752,
+  "elev": -3714.78,
+  "waypoint": "site 106 drive 2116 (sol 4151)",
+  "odometerKm": 31.91,
+  "imgSols": [
+   4151,
+   4152
+  ],
+  "images": [
+   {
+    "file": "pov/wp4151/0.jpg",
+    "sol": 4152,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04152/opgs/edr/ncam/NLB_766098737EDR_F1062194NCAM00297M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4342",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4342",
+  "sol": 4342,
+  "lon": 137.4049039,
+  "lat": -4.78322939,
+  "elev": -3718.33,
+  "waypoint": "site 110 drive 456 (sol 4342)",
+  "odometerKm": 33.11,
+  "imgSols": [
+   4342,
+   4343
+  ],
+  "images": [
+   {
+    "file": "pov/wp4342/0.jpg",
+    "sol": 4343,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04343/opgs/edr/ncam/NLB_783045983EDR_F1100624NCAM00265M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4374",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4374",
+  "sol": 4374,
+  "lon": 137.4019363,
+  "lat": -4.78331173,
+  "elev": -3720.038,
+  "waypoint": "site 111 drive 1548 (sol 4374)",
+  "odometerKm": 33.36,
+  "imgSols": [
+   4374,
+   4375
+  ],
+  "images": [
+   {
+    "file": "pov/wp4374/0.jpg",
+    "sol": 4374,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04374/opgs/edr/ncam/NLB_785798097EDR_F1111548NCAM00298M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4387",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4387",
+  "sol": 4387,
+  "lon": 137.3993071,
+  "lat": -4.78332688,
+  "elev": -3724.71,
+  "waypoint": "site 111 drive 2548 (sol 4387)",
+  "odometerKm": 33.52,
+  "imgSols": [
+   4387,
+   4388
+  ],
+  "images": [
+   {
+    "file": "pov/wp4387/0.jpg",
+    "sol": 4388,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04388/opgs/edr/ncam/NRB_787033597EDR_S1112548NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4452",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4452",
+  "sol": 4452,
+  "lon": 137.3926205,
+  "lat": -4.7872261,
+  "elev": -3721.09,
+  "waypoint": "site 113 drive 1128 (sol 4452)",
+  "odometerKm": 34.09,
+  "imgSols": [
+   4452,
+   4453
+  ],
+  "images": [
+   {
+    "file": "pov/wp4452/0.jpg",
+    "sol": 4453,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04453/opgs/edr/ncam/NRB_792804672EDR_S1131128NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4466",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4466",
+  "sol": 4466,
+  "lon": 137.3914152,
+  "lat": -4.78961629,
+  "elev": -3713.368,
+  "waypoint": "site 113 drive 2394 (sol 4466)",
+  "odometerKm": 34.26,
+  "imgSols": [
+   4466,
+   4467
+  ],
+  "images": [
+   {
+    "file": "pov/wp4466/0.jpg",
+    "sol": 4467,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04467/opgs/edr/ncam/NRB_794049596EDR_S1132394NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4487",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4487",
+  "sol": 4487,
+  "lon": 137.3908026,
+  "lat": -4.7921003,
+  "elev": -3699.512,
+  "waypoint": "site 114 drive 1164 (sol 4487)",
+  "odometerKm": 34.46,
+  "imgSols": [
+   4487,
+   4488
+  ],
+  "images": [
+   {
+    "file": "pov/wp4487/0.jpg",
+    "sol": 4488,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04488/opgs/edr/ncam/NRB_795914195EDR_S1141164NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4507",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4507",
+  "sol": 4507,
+  "lon": 137.3882757,
+  "lat": -4.79384501,
+  "elev": -3690.303,
+  "waypoint": "site 115 drive 390 (sol 4507)",
+  "odometerKm": 34.73,
+  "imgSols": [
+   4507,
+   4508
+  ],
+  "images": [
+   {
+    "file": "pov/wp4507/0.jpg",
+    "sol": 4507,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04507/opgs/edr/ncam/NLB_797611617EDR_F1150390NCAM00293M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4523",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4523",
+  "sol": 4523,
+  "lon": 137.3877473,
+  "lat": -4.79641047,
+  "elev": -3666.029,
+  "waypoint": "site 115 drive 1770 (sol 4523)",
+  "odometerKm": 34.91,
+  "imgSols": [
+   4523,
+   4524
+  ],
+  "images": [
+   {
+    "file": "pov/wp4523/0.jpg",
+    "sol": 4524,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04524/opgs/edr/ncam/NRB_799109232EDR_S1151770NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4544",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4544",
+  "sol": 4544,
+  "lon": 137.3856636,
+  "lat": -4.79796004,
+  "elev": -3654.481,
+  "waypoint": "site 116 drive 576 (sol 4544)",
+  "odometerKm": 35.11,
+  "imgSols": [
+   4544,
+   4545
+  ],
+  "images": [
+   {
+    "file": "pov/wp4544/0.jpg",
+    "sol": 4545,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04545/opgs/edr/ncam/NRB_800972875EDR_S1160576NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4578",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4578",
+  "sol": 4578,
+  "lon": 137.3817054,
+  "lat": -4.8019306,
+  "elev": -3645.46,
+  "waypoint": "site 117 drive 168 (sol 4578)",
+  "odometerKm": 35.49,
+  "imgSols": [
+   4578,
+   4579
+  ],
+  "images": [
+   {
+    "file": "pov/wp4578/0.jpg",
+    "sol": 4579,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04579/opgs/edr/ncam/NRB_803983567EDR_S1170168NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4844",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4844",
+  "sol": 4844,
+  "lon": 137.3816768,
+  "lat": -4.81053581,
+  "elev": -3595.451,
+  "waypoint": "site 121 drive 876 (sol 4844)",
+  "odometerKm": 36.86,
+  "imgSols": [
+   4844,
+   4845
+  ],
+  "images": [
+   {
+    "file": "pov/wp4844/0.jpg",
+    "sol": 4845,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04845/opgs/edr/ncam/NLB_827609472EDR_F1210990NCAM00277M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ },
+ {
+  "id": "wp4857",
+  "kind": "landmark",
+  "name": "Curiosity, sol 4857",
+  "sol": 4857,
+  "lon": 137.3818456,
+  "lat": -4.81316906,
+  "elev": -3578.401,
+  "waypoint": "site 121 drive 2202 (sol 4857)",
+  "odometerKm": 37.04,
+  "imgSols": [
+   4857,
+   4858
+  ],
+  "images": [
+   {
+    "file": "pov/wp4857/0.jpg",
+    "sol": 4857,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04857/opgs/edr/ncam/NLB_828672294EDR_F1212202NCAM00288M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ]
+ }
+]

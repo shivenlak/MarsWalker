@@ -9,6 +9,8 @@ export class Screens {
   private q = <T extends HTMLElement>(s: string) => this.el.querySelector(s) as T;
   onPlan: (() => void) | null = null;
   onQuick: (() => void) | null = null;
+  onFree: (() => void) | null = null;
+  onOptions: (() => void) | null = null;
 
   constructor(root: HTMLElement) {
     this.el = document.createElement("div");
@@ -27,8 +29,9 @@ export class Screens {
           <div class="sub2"></div>
         </div>
         <div class="t-menu">
-          <button class="btn big" data-act="plan">PLAN EVA</button>
-          <button class="btn" data-act="quick">QUICK START</button>
+          <button class="btn big" data-act="plan">MISSION</button>
+          <button class="btn big" data-act="free">FREE EXPLORE</button>
+          <div class="t-row"><button class="btn" data-act="quick">QUICK MISSION</button><button class="btn" data-act="options">OPTIONS</button></div>
         </div>
         <div class="t-foot">Every metre of ground is real: USGS 1 m HiRISE terrain · HiRISE colour · HRSC-MOLA Mount Sharp ·
           Curiosity traverse, Navcam images and REMS weather. NASA Space Apps 2026.</div>
@@ -50,6 +53,8 @@ export class Screens {
     root.appendChild(this.el);
     this.el.querySelector<HTMLButtonElement>("[data-act=plan]")!.onclick = () => this.onPlan?.();
     this.el.querySelector<HTMLButtonElement>("[data-act=quick]")!.onclick = () => this.onQuick?.();
+    this.el.querySelector<HTMLButtonElement>("[data-act=free]")!.onclick = () => this.onFree?.();
+    this.el.querySelector<HTMLButtonElement>("[data-act=options]")!.onclick = () => this.onOptions?.();
     const lb = this.q<HTMLElement>(".lightbox");
     lb.onclick = () => lb.classList.remove("on");
   }
@@ -109,6 +114,7 @@ export class Screens {
   debrief(d: {
     success: boolean; stopsDone: number; stopsTotal: number; distM: number; planDistM: number; evaS: number; planEvaS: number;
     climbM: number; doseMSv: number; remainingPct: number; reason: string;
+    extra?: [string, string, string][]; score?: number;
   }, onAgain: () => void) {
     this.only("debrief");
     const row = (k: string, v: string, p = "") => `<tr><td>${k}</td><td>${v}</td><td class="src">${p}</td></tr>`;
@@ -123,7 +129,9 @@ export class Screens {
         ${row("Climb", `+${d.climbM.toFixed(0)} m`)}
         ${row("Radiation dose", `${(d.doseMSv * 1000).toFixed(0)} µSv`, "0.64 mSv/sol, Hassler 2014")}
         ${row("Consumables left", `${d.remainingPct.toFixed(0)}%`)}
+        ${(d.extra ?? []).map(([a, b, c]) => row(a, b, c)).join("")}
       </table>
+      ${d.score != null ? `<div class="score">SCIENCE SCORE <b>${d.score}</b></div>` : ""}
       <p class="src">Plan = A* route + ${EVA.stopDwellMin.value} min per stop. Actual walking distance is measured on the 2 m terrain, which is why it can differ from the plan (computed on 10 m cells).</p>
       <button class="btn big again">NEW EVA</button>`;
     this.q<HTMLButtonElement>(".again").onclick = onAgain;

@@ -79,7 +79,11 @@
     "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04217/opgs/edr/ncam/NRB_771852125EDR_S1072496NCAM00594M_.JPG",
     "credit": "NASA/JPL-Caltech"
    }
-  ]
+  ],
+  "sample": {
+   "name": "Sulfur-bearing stone",
+   "about": "Light-toned stone from the Gediz Vallis debris: Curiosity found pure elemental sulfur in this field."
+  }
  },
  {
   "id": "boxwork_entry",
@@ -120,7 +124,11 @@
     "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04603/opgs/edr/ncam/NRB_806121290EDR_S1172490NCAM00594M_.JPG",
     "credit": "NASA/JPL-Caltech"
    }
-  ]
+  ],
+  "sample": {
+   "name": "Ridge vein fragment",
+   "about": "Mineral-cemented fracture fill from a boxwork ridge."
+  }
  },
  {
   "id": "boxwork_main",
@@ -159,6 +167,231 @@
     "sol": 4709,
     "instrument": "NAV_RIGHT_B",
     "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04709/opgs/edr/ncam/NRB_815539273EDR_S1200000NCAM00263M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ],
+  "sample": {
+   "name": "Ridge/hollow core pair",
+   "about": "Paired cores from a boxwork ridge and the hollow beside it (Curiosity drilled 'Nevado Sajama' on a ridge, sol ~4718)."
+  }
+ },
+ {
+  "id": "mineral_king",
+  "kind": "science",
+  "name": "Mineral King drill site",
+  "sol": 4102,
+  "what": "Gray rock block drilled as Curiosity's 40th successful drill hole (sols ~4107-4115, Feb-Mar 2024), beside the Gediz Vallis ridge.",
+  "why": "The rock was so hard the hole came out shallow; a test of how cemented the sulfate-bearing layers are, with the chaotic Gediz Vallis ridge deposit in view.",
+  "evidence": "NASA Curiosity blogs 'Sols 4107-4109: Drilling Mineral King', 'Sols 4110-4111: Mining into Mineral King', 'Sols 4114-4115: Bingo! 40th successful drill hole'.",
+  "lookFor": "Gray, fine-grained bedrock blocks; the Gediz Vallis ridge (debris pile) on the skyline.",
+  "imgSols": [
+   4102,
+   4112
+  ],
+  "lon": 137.4073539,
+  "lat": -4.78011774,
+  "elev": -3730.01,
+  "waypoint": "site 106 drive 660 (sol 4102)",
+  "images": [
+   {
+    "file": "pov/mineral_king/0.jpg",
+    "sol": 4112,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04112/opgs/edr/ncam/NRB_762529622EDR_S1060660NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/mineral_king/1.jpg",
+    "sol": 4106,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04106/opgs/edr/ncam/NRB_761994752EDR_S1060660NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/mineral_king/2.jpg",
+    "sol": 4104,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04104/opgs/edr/ncam/NRB_761827454EDR_S1060660NCAM00591M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ],
+  "sample": {
+   "name": "Hard gray bedrock core",
+   "about": "Strongly cemented sulfate-unit rock - the drill barely got in."
+  }
+ },
+ {
+  "id": "kings_canyon",
+  "kind": "science",
+  "name": "Kings Canyon drill site",
+  "sol": 4255,
+  "what": "Drill site inside the Gediz Vallis channel (Aug 2024); Curiosity marked its 12th landing anniversary here (sol 4265, Aug 6 2024).",
+  "why": "Samples from the channel floor went to CheMin and SAM (evolved gas analysis) to compare with the sulfur-rich debris upstream.",
+  "evidence": "NASA Curiosity blogs 'Sols 4263-4265: A Royal Birthday Celebration at Kings Canyon', 'Sols 4270-4272: Sample for SAM', 'Sols 4280-4281: Last Call at Kings Canyon'.",
+  "lookFor": "Channel-floor bedrock between debris-flow boulders; the walls of Gediz Vallis.",
+  "imgSols": [
+   4256,
+   4270
+  ],
+  "lon": 137.4091283,
+  "lat": -4.78731872,
+  "elev": -3673.32,
+  "waypoint": "site 108 drive 792 (sol 4255)",
+  "images": [
+   {
+    "file": "pov/kings_canyon/0.jpg",
+    "sol": 4269,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04269/opgs/edr/ncam/NRB_776481643EDR_S1080792NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/kings_canyon/1.jpg",
+    "sol": 4269,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04269/opgs/edr/ncam/NRB_776481418EDR_S1080792NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/kings_canyon/2.jpg",
+    "sol": 4269,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04269/opgs/edr/ncam/NRB_776465792EDR_S1080792NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ],
+  "sample": {
+   "name": "Channel-floor drill powder",
+   "about": "Gediz Vallis channel bedrock, for comparison with the sulfur debris."
+  }
+ },
+ {
+  "id": "altadena",
+  "kind": "science",
+  "name": "Altadena drill site",
+  "sol": 4560,
+  "what": "Curiosity's 43rd drill hole (June 2025) at the edge of the boxwork unit.",
+  "why": "Baseline chemistry of the bedrock just before the boxwork ridges, to compare with samples from ridges and hollows.",
+  "evidence": "NASA Curiosity blogs 'Sols 4561-4562: Prepping to Drill at Altadena', 'Sols 4566-4567: Drilling Success', 'Sols 4568-4569: A Close Look at the Altadena Drill Hole and Tailings'.",
+  "lookFor": "Flat layered bedrock with the first low boxwork ridges ahead to the south.",
+  "imgSols": [
+   4560,
+   4570
+  ],
+  "lon": 137.3835414,
+  "lat": -4.79984723,
+  "elev": -3647.181,
+  "waypoint": "site 116 drive 1944 (sol 4560)",
+  "images": [
+   {
+    "file": "pov/altadena/0.jpg",
+    "sol": 4569,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04569/opgs/edr/ncam/NRB_803103391EDR_S1161944NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/altadena/1.jpg",
+    "sol": 4563,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04563/opgs/edr/ncam/NRB_802568641EDR_S1161944NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/altadena/2.jpg",
+    "sol": 4560,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04560/opgs/edr/ncam/NLB_802308172EDR_S1161944NCAM00266M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ],
+  "sample": {
+   "name": "Boxwork-edge bedrock core",
+   "about": "Baseline bedrock just outside the boxwork unit."
+  }
+ },
+ {
+  "id": "basque_lakes",
+  "kind": "science",
+  "name": "Basque Lakes drill site",
+  "sol": 5021,
+  "what": "Recent drill campaign south of the boxwork (rover parked sols ~5021-5041, mid-2026).",
+  "why": "Newest terrain on the climb up Mount Sharp; the team gathered context imaging around the drill hole while operating on limited power.",
+  "evidence": "NASA Curiosity blog 'Sols 5029-5035: Back in the Lab' (Basque Lakes drill hole); MSL waypoints sols 5021-5041.",
+  "lookFor": "Pale layered rock rising toward the higher sulfate unit; Mount Sharp's upper slopes beyond.",
+  "imgSols": [
+   5021,
+   5035
+  ],
+  "lon": 137.3888471,
+  "lat": -4.82513971,
+  "elev": -3479.905,
+  "waypoint": "site 125 drive 558 (sol 5021)",
+  "images": [
+   {
+    "file": "pov/basque_lakes/0.jpg",
+    "sol": 5035,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/05035/opgs/edr/ncam/NRB_844468973EDR_S1250558NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/basque_lakes/1.jpg",
+    "sol": 5035,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/05035/opgs/edr/ncam/NRB_844468792EDR_S1250558NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/basque_lakes/2.jpg",
+    "sol": 5032,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/05032/opgs/edr/ncam/NRB_844215873EDR_S1250558NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   }
+  ],
+  "sample": {
+   "name": "Upper-unit drill powder",
+   "about": "Newest layers on the climb up Mount Sharp."
+  }
+ },
+ {
+  "id": "curiosity",
+  "kind": "rover",
+  "name": "Curiosity rover (latest position)",
+  "sol": 5073,
+  "what": "Where NASA's Curiosity rover was parked at the end of the latest published drive (sol 5073).",
+  "why": "Curiosity has driven over every science stop on this map since 2024; its cameras supplied the photos in this game.",
+  "evidence": "MSL waypoints feed (NASA MMGIS), latest drive end point in the data.",
+  "lookFor": "A six-wheeled, car-sized rover with a mast; fresh wheel tracks behind it.",
+  "imgSols": [
+   5069,
+   5073
+  ],
+  "lon": 137.388886,
+  "lat": -4.82602331,
+  "elev": -3472.085,
+  "waypoint": "site 125 drive 2490 (sol 5073)",
+  "images": [
+   {
+    "file": "pov/curiosity/0.jpg",
+    "sol": 5073,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/05073/opgs/edr/ncam/NLB_847853098EDR_F1252490NCAM00282M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/curiosity/1.jpg",
+    "sol": 5071,
+    "instrument": "NAV_RIGHT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/05071/opgs/edr/ncam/NRB_847663928EDR_S1252274NCAM00594M_.JPG",
+    "credit": "NASA/JPL-Caltech"
+   },
+   {
+    "file": "pov/curiosity/2.jpg",
+    "sol": 5070,
+    "instrument": "NAV_LEFT_B",
+    "source": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/05070/opgs/edr/ncam/NLB_847594480EDR_S1252274NCAM00280M_.JPG",
     "credit": "NASA/JPL-Caltech"
    }
   ]

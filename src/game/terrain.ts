@@ -20,7 +20,19 @@ export class Terrain {
   private h: Float32Array; // metres relative to yRef, row 0 = north
   readonly group = new THREE.Group();
   private detailTex: THREE.Texture;
-  readonly detailUniforms = { uCamPos: { value: new THREE.Vector3() } };
+  readonly detailUniforms = {
+    uCamPos: { value: new THREE.Vector3() },
+    uOv: { value: null as THREE.Texture | null },
+    uOvMix: { value: 0 },
+    uOvRect: { value: new THREE.Vector4(0, 0, 1, 1) }, // world x0, z0, width, depth covered by the overlay
+  };
+
+  /** Drape a data layer on the terrain (null = off). rect in world metres. */
+  setOverlay(tex: THREE.Texture | null, rect?: { x0: number; z0: number; w: number; h: number }, mix = 0.7) {
+    this.detailUniforms.uOv.value = tex;
+    this.detailUniforms.uOvMix.value = tex ? mix : 0;
+    if (rect) this.detailUniforms.uOvRect.value.set(rect.x0, rect.z0, rect.w, rect.h);
+  }
 
   private constructor(meta: WorldMeta, h: Float32Array) {
     this.meta = meta;
@@ -166,11 +178,14 @@ export class Terrain {
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uDetail = { value: detail };
       sh.uniforms.uCamPos = uni.uCamPos;
+      sh.uniforms.uOv = uni.uOv;
+      sh.uniforms.uOvMix = uni.uOvMix;
+      sh.uniforms.uOvRect = uni.uOvRect;
       sh.vertexShader = sh.vertexShader
         .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;")
         .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
       sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D uDetail;\nuniform vec3 uCamPos;")
+        .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D uDetail;\nuniform vec3 uCamPos;\nuniform sampler2D uOv;\nuniform float uOvMix;\nuniform vec4 uOvRect;")
         .replace("#include <map_fragment>", `#include <map_fragment>
           float dCam = distance(vWPos, uCamPos);
           float near = 1.0 - smoothstep(10.0, 70.0, dCam);
@@ -178,7 +193,14 @@ export class Terrain {
           float g2 = texture2D(uDetail, vWPos.xz * 0.11 + 0.37).g;
           float grit = mix(1.0, 0.62 + 0.76 * g1 * (0.55 + 0.9 * g2), near);
           diffuseColor.rgb *= grit;
-          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 0.97, 0.9), 0.5);`)
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 0.97, 0.9), 0.5);
+          if (uOvMix > 0.0) {
+            vec2 ouv = (vWPos.xz - uOvRect.xy) / uOvRect.zw;
+            if (ouv.x > 0.0 && ouv.x < 1.0 && ouv.y > 0.0 && ouv.y < 1.0) {
+              vec4 ov = texture2D(uOv, vec2(ouv.x, 1.0 - ouv.y));
+              diffuseColor.rgb = mix(diffuseColor.rgb, ov.rgb, uOvMix * ov.a);
+            }
+          }`)
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
           {
             // close-range micro relief: bump the normal from the grit texture (world-space -> view-space)
@@ -187,7 +209,7 @@ export class Terrain {
             float h0 = texture2D(uDetail, q).r, hx = texture2D(uDetail, q + vec2(e, 0.0)).r, hz = texture2D(uDetail, q + vec2(0.0, e)).r;
             vec2 q2 = vWPos.xz * 1.7;
             float k0 = texture2D(uDetail, q2).r, kx = texture2D(uDetail, q2 + vec2(e, 0.0)).r, kz = texture2D(uDetail, q2 + vec2(0.0, e)).r;
-            vec3 dW = vec3(-(hx - h0) - 0.5 * (kx - k0), 0.0, -(hz - h0) - 0.5 * (kz - k0)) * 9.0 * near;
+            vec3 dW = vec3(-(hx - h0) - 0.5 * (kx - k0), 0.0, -(hz - h0) - 0.5 * (kz - k0)) * 6.0 * near;
             normal = normalize(normal + (viewMatrix * vec4(dW, 0.0)).xyz);
           }`);
     };

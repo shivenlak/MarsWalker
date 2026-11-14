@@ -141,6 +141,23 @@ Mars gravity 3.71–3.72 m/s² is from the NASA Mars Fact Sheet.
 
 Rocks are drawn procedurally: the density per 10 m cell follows the DTM roughness grid, but individual rocks are illustrative, not mapped boulders. Footprints, dust and wind are cosmetic.
 
+## v3 additions: more sites, Curiosity's stops (2026-11-14)
+
+Science sites were added only where a NASA Curiosity blog post confirms the activity. Each is snapped to the MSL waypoint where the rover was parked:
+
+| Site | Waypoint | Evidence |
+|---|---|---|
+| Mineral King drill site | site 106 drive 660 (sol 4102), 137.40735, −4.78012 | NASA blogs "Sols 4107–4109: Drilling Mineral King", "Sols 4110–4111: Mining into Mineral King", "Sols 4114–4115: Bingo! Curiosity's 40th successful drill hole" |
+| Kings Canyon drill site | site 108 drive 792 (sol 4255), 137.40913, −4.78732 | NASA blogs "Sols 4263–4265: A Royal Birthday Celebration at Kings Canyon", "Sols 4270–4272: Sample for SAM", "Sols 4280–4281: Last Call at Kings Canyon" |
+| Altadena drill site | site 116 drive 1944 (sol 4560), 137.38354, −4.79985 | NASA blogs "Sols 4561–4562: Prepping to Drill at Altadena", "Sols 4566–4567: Drilling Success", "Sols 4568–4569: A Close Look at the Altadena Drill Hole" (43rd drill hole, June 2025) |
+| Basque Lakes drill site | site 125 drive 558 (sol 5021), 137.38885, −4.82514 | NASA blog "Sols 5029–5035: Back in the Lab". Rover parked sols 5021–5041 |
+| Curiosity (latest position) | site 125 drive 2490 (sol 5073), 137.38889, −4.82602 | Latest drive end point in the MMGIS waypoints feed |
+| Boxwork main (text update) | – | "Nevado Sajama" ridge drill, sol ~4718 (NASA blog "Sols 4716–4722: Drilling Success at Nevado Sajama") |
+
+**Curiosity's stops ("Curiosity was here")** are 16 real drive end-points in the AOI, at least 150 m apart and from the science sites. Each has one near-horizontal full-frame Navcam image from that sol (raw image API) and the rover's odometer from the waypoints feed → `data/processed/landmarks.json`, `pov/wp*/`.
+
+**Curiosity's wheel tracks** are drawn along the MMGIS traverse with a 2.8 m track width. The decal includes the Morse-code "JPL" holes from the real wheels; age and erosion are not modelled.
+
 ## Open verification items
 - [x] Boxwork entrance sols: the waypoint data shows the climb from −3645 m (sol 4591) to −3631 m (sols 4602–4605), consistent with the reported 11 m climb. Still worth a glance at the NASA blog for the exact narrative
 - [ ] CRISM MTRDR footprint overlap with the route corridor (Phase 2)

@@ -17,31 +17,37 @@ npm install
 npm run dev          # open http://localhost:5173
 ```
 
-All data (~31 MB) is preprocessed and committed in `data/processed/`, so the game runs **offline** with no API calls.
+All data (~39 MB) is preprocessed and committed in `data/processed/`, so the game runs **offline** with no API calls.
 
 ```bash
-npm test             # 13 tests: A* (incl. the 10x10 wall), route on real terrain, suit/PNR, Mars clock vs REMS
+npm test             # 20 tests: A* (incl. the 10x10 wall), walking + buggy routes and park-and-walk on real terrain,
+                     # suit/PNR, survival model, Mars clock vs REMS
 npm run build        # type-check + production build into dist/
 ```
 
 ## How to play
 
-| Key | Action |
-|---|---|
-| **W A S D** / arrows | Walk (camera-relative). Speed follows the same Tobler slope model the planner uses |
-| **Shift** | Lope (low-gravity gait) |
-| **Space** | Hop (Mars gravity, 3.72 m/s²) |
-| **F** | Autopilot: follow the A* route to the next objective |
-| **E** | Survey a science stop / end the EVA at base |
-| **Click** the ground | Terrain scan: elevation, slope, roughness, go/no-go; **N** = navigate there with A* |
-| **M** or click the minimap | Mission map: change stops (live A* replan), click legs for an elevation profile, click anywhere for a readout or "navigate here" |
-| **V** | Toggle third-person / first-person visor |
-| **[ ]** | Time warp ×1 to ×60 (sun, clock, consumables and dose all scale) |
-| **H** | Show the A* path home |
-| Drag / wheel | Orbit / zoom the camera · **P** mute |
+**Modes** (title screen):
+- **Mission**: plan the stops (walking or buggy). Drill and bag a core at each site, find 3 field specimens with the spectrometer, and deliver everything to the habitat lab. Scored.
+- **Free Explore**: roam the whole 2.4 × 3.3 km survey area. Find the 8 science sites, Curiosity itself (parked at its real sol 5073 position) and 16 of its past stopping points (each unlocks the Navcam photo it took there), and collect specimens.
+- **Options**: start on foot or in the buggy; hazards Realistic / Forgiving / Off; start time (race the sunset); graphics; sound.
 
-**Flow:** Title → **Plan EVA** (briefing: conditions for today's sol, stop selection, A* budget, start time) →
-fly-in → walk/autopilot to each stop → survey (image + sample, 30 min) → return to base → debrief (actual vs plan).
+| Key | On foot | In the buggy |
+|---|---|---|
+| **W A S D** | walk (Tobler slope speed) | throttle / steer (LRV: 13 km/h max) |
+| **Shift / Space** | lope / hop (Mars gravity) | – / brake |
+| **E** | survey site · collect specimen · drive the buggy · enter the habitat or shelter | get out |
+| **F** | autopilot along the A* route | autopilot (park-and-walk when the buggy can't reach) |
+| **V** | first-person helmet view (visor, frost, dust, breath fog) | seat view |
+| **Q** | spectrometer: specimens glow; the beep speeds up as you close in | |
+| **T** | data layer on the terrain: slope / A* go-no-go / elevation / THEMIS thermal | |
+| **G** | pick up / throw a rock (ballistic in 0.38 g) | |
+| **B** | pitch the emergency shelter (one per EVA) | |
+| **L / Z / X** | helmet lamps / gold sun visor / wipe visor | |
+| **M / J / Esc** | mission map / journal / pause menu | |
+| **[ ]** · **H** · **Click** | time warp · A* path home · terrain scan (**N** = navigate there) | |
+
+**Survival:** the suit's O₂/water/power drain faster when you work hard, carry samples, or run the heater. Gale nights fall to about −73 °C (REMS). Falls above ~2 m hurt. A solar particle event can arrive with a 20-minute warning. Dust devils coat your visor. The buggy can roll over on side slopes. The habitat recharges you; the shelter gets you through a night.
 
 ## What's real, what's modelled
 
@@ -67,7 +73,8 @@ Rocks are scattered procedurally with density driven by the DTM roughness grid. 
 scripts/          offline data pipeline (Python): build_terrain, build_world, fetch_basemap, fetch_rover, fetch_conditions
 data/processed/   web-ready data served at the site root (terrain grid, 3D world chunks, tiles, POV images, conditions)
 src/core/         pure logic, no UI: config (every number + source), grid, astar, cost, route, nav, sun, suit (+ tests)
-src/game/         Three.js game: terrain, sky, astronaut, player, effects, markers, hud, screens, audio, game loop
+src/game/         Three.js game: terrain, sky, astronaut (IK), player, buggy, props (habitat, Curiosity, shelter,
+                  rocks, specimens, dust devils, tracks), helmet, effects, markers, hud, menus, screens, audio, game loop
 src/planner/      mission map (Leaflet): briefing, stop selection, budget, leg profiles, terrain readout
 src/shared/       data loading, conditions (REMS/DONKI), store, formatting
 ```

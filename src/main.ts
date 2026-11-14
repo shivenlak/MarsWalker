@@ -6,19 +6,23 @@ import "@fontsource/rajdhani/500.css";
 import "@fontsource/rajdhani/600.css";
 import "@fontsource/rajdhani/700.css";
 import "./style.css";
-import { loadGrid } from "./core/grid";
+import { loadGrid, lonLatToXY } from "./core/grid";
 import { Game } from "./game/game";
 import { Terrain } from "./game/terrain";
 import { loadConditions } from "./shared/conditions";
-import { loadStops } from "./shared/data";
+import { loadLandmarks, loadStops, loadTraverse } from "./shared/data";
 import { store } from "./shared/store";
 
 async function main() {
   const root = document.getElementById("app")!;
-  const [grid, stops, terrain, cond] = await Promise.all([loadGrid(), loadStops(), Terrain.load(), loadConditions()]);
+  const [grid, stops, terrain, cond, trav, landmarks] = await Promise.all([
+    loadGrid(), loadStops(), Terrain.load(), loadConditions(), loadTraverse(), loadLandmarks()]);
   store.grid = grid;
   store.stops = stops;
-  const game = new Game(root, terrain, grid, cond.rems, cond.donki);
+  // Curiosity's traverse in world coordinates (for its wheel tracks)
+  const traverse = trav.features.map((f) => (f.geometry as GeoJSON.LineString).coordinates
+    .map(([lon, lat]) => terrain.toWorld(lonLatToXY({ lon, lat }))));
+  const game = new Game(root, terrain, grid, cond.rems, cond.donki, { traverse, landmarks });
   if (import.meta.env.DEV) Object.assign(window, { game, terrain });
   const scr = game.loadingScreens;
   scr.progress(0.05, "Building terrain chunks (2 m DTM + HiRISE colour)…");

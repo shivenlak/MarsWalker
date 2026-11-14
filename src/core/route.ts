@@ -122,3 +122,31 @@ export function routeThrough(g: Grid, order: Stop[], p: TerrainProfile, dwellSto
     computeMs: performance.now() - t0,
   };
 }
+
+/**
+ * Park-and-walk: the passable cell closest to `target` that is actually connected to `from` for this
+ * profile (BFS over the 8-connected passable region). Lets a buggy drive as close as the terrain allows.
+ */
+export function nearestReachable(g: Grid, from: Stop, target: Stop, p: TerrainProfile): { stop: Stop; gapM: number } | null {
+  const start = snapToPassable(g, xyToIdx(g, lonLatToXY(from)), p);
+  const goalXY = lonLatToXY(target);
+  if (start < 0) return null;
+  const seen = new Uint8Array(g.cols * g.rows);
+  const queue = new Int32Array(g.cols * g.rows);
+  let head = 0, tail = 0, best = start, bestD = Infinity;
+  queue[tail++] = start; seen[start] = 1;
+  while (head < tail) {
+    const i = queue[head++];
+    const xy = idxToXY(g, i);
+    const d = Math.hypot(xy.x - goalXY.x, xy.y - goalXY.y);
+    if (d < bestD) { bestD = d; best = i; }
+    const [c, r] = colRow(g, i);
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const cc = c + dc, rr = r + dr;
+      if ((!dr && !dc) || cc < 0 || rr < 0 || cc >= g.cols || rr >= g.rows) continue;
+      const j = idx(g, cc, rr);
+      if (!seen[j] && isPassable(g, j, p)) { seen[j] = 1; queue[tail++] = j; }
+    }
+  }
+  return { stop: { id: `${target.id}_park`, name: `${target.name} (park)`, ...xyToLonLat(idxToXY(g, best)) }, gapM: bestD };
+}

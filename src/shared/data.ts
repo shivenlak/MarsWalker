@@ -5,7 +5,7 @@ import type { Stop } from "../core/route";
 export interface StopImage { file: string; sol: number; instrument: string; source: string; credit: string }
 
 export interface StopInfo extends Stop {
-  kind: "base" | "science";
+  kind: "base" | "science" | "rover";
   sol: number;
   elev: number;
   waypoint: string;
@@ -14,6 +14,11 @@ export interface StopInfo extends Stop {
   evidence: string;
   lookFor: string;
   images: StopImage[];
+  sample?: { name: string; about: string };
+}
+
+export interface Landmark extends Stop {
+  kind: "landmark"; sol: number; elev: number; waypoint: string; odometerKm: number | null; images: StopImage[];
 }
 
 export interface Bounds { west: number; east: number; south: number; north: number }
@@ -33,6 +38,7 @@ const json = async <T>(path: string): Promise<T> => {
 
 export const loadStops = () => json<StopInfo[]>("stops.json");
 export const loadTraverse = () => json<GeoJSON.FeatureCollection>("rover/traverse.geojson");
+export const loadLandmarks = () => json<Landmark[]>("landmarks.json");
 
 export async function loadOverlays(): Promise<Overlays> {
   const o = await json<Omit<Overlays, "themis">>("overlays/overlays.json");

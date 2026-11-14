@@ -18,13 +18,12 @@ export class Footprints {
   private up = new THREE.Vector3(0, 1, 0);
   private nrm = new THREE.Vector3();
 
-  constructor(private terrain: Terrain) {
-    const tex = treadTexture();
+  constructor(private terrain: Terrain, w = 0.17, h = 0.33, tex: THREE.Texture = treadTexture()) {
     const mat = new THREE.MeshStandardMaterial({
       map: tex, transparent: true, depthWrite: false, roughness: 1,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
-    const geo = new THREE.PlaneGeometry(0.17, 0.33).rotateX(-Math.PI / 2);
+    const geo = new THREE.PlaneGeometry(w, h).rotateX(-Math.PI / 2);
     this.mesh = new THREE.InstancedMesh(geo, mat, this.max);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -42,6 +41,18 @@ export class Footprints {
     this.mesh.count = Math.min(this.n, this.max);
     this.mesh.instanceMatrix.needsUpdate = true;
   }
+}
+
+export function wheelTrackTexture(): THREE.Texture {
+  const c = document.createElement("canvas");
+  c.width = 32; c.height = 64;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "rgba(45,24,14,0.5)"; g.fillRect(3, 0, 26, 64);
+  g.fillStyle = "rgba(20,10,5,0.5)";
+  for (let y = 0; y < 64; y += 8) { g.beginPath(); g.moveTo(3, y); g.lineTo(16, y + 5); g.lineTo(29, y); g.lineTo(29, y + 3); g.lineTo(16, y + 8); g.lineTo(3, y + 3); g.fill(); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 function treadTexture(): THREE.Texture {
