@@ -10,13 +10,15 @@ import { loadGrid, lonLatToXY } from "./core/grid";
 import { Game } from "./game/game";
 import { Terrain } from "./game/terrain";
 import { loadConditions } from "./shared/conditions";
+import { Crism } from "./shared/crism";
 import { loadLandmarks, loadStops, loadTraverse } from "./shared/data";
 import { store } from "./shared/store";
 
 async function main() {
   const root = document.getElementById("app")!;
-  const [grid, stops, terrain, cond, trav, landmarks] = await Promise.all([
-    loadGrid(), loadStops(), Terrain.load(), loadConditions(), loadTraverse(), loadLandmarks()]);
+  const [grid, stops, terrain, cond, trav, landmarks, crism] = await Promise.all([
+    loadGrid(), loadStops(), Terrain.load(), loadConditions(), loadTraverse(), loadLandmarks(), Crism.load()]);
+  store.crism = crism;
   store.grid = grid;
   store.stops = stops;
   // Curiosity's traverse in world coordinates (for its wheel tracks)

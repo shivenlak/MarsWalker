@@ -267,21 +267,24 @@ const SPECIMEN_TYPES: Record<string, { name: string; about: string; color: numbe
   altadena: { name: "Layered bedrock chip", about: "Thinly layered sulfate-unit bedrock from the boxwork's edge.", color: 0x9a6a4c },
   basque_lakes: { name: "Pale upper-unit chip", about: "Pale layered rock from higher up Mount Sharp.", color: 0xc9a98a },
   plain: { name: "Sulfate-unit pebble", about: "Ordinary sulfate-bearing bedrock, the backbone of lower Mount Sharp.", color: 0x8c5e44 },
+  crism: { name: "Hydrated-mineral target", about: "Picked from orbit: one of the strongest CRISM hydration signals in the area.", color: 0xb26fd0 },
 };
 
 export class Specimens {
   readonly group = new THREE.Group();
   readonly list: Specimen[] = [];
   private t = 0;
-  constructor(terrain: Terrain, grid: Grid, sites: { id: string; x: number; z: number }[]) {
+  /** hot: orbital (CRISM) hydration hotspots in world coords; specimens are placed there, labelled with the reading */
+  constructor(terrain: Terrain, grid: Grid, sites: { id: string; x: number; z: number }[], hot: { x: number; z: number; about: string }[] = []) {
     const rnd = mulberry(4242);
     const passable = (x: number, z: number) => {
       const i = Math.floor(z / grid.cellSize) * grid.cols + Math.floor(x / grid.cellSize);
       return grid.slope[i] < 22 && grid.rough[i] < 0.45;
     };
-    const add = (site: string, x: number, z: number) => {
+    const add = (site: string, x: number, z: number, about?: string) => {
       if (!terrain.inside(x, z, 20) || !passable(x, z)) return;
-      const t = SPECIMEN_TYPES[site] ?? SPECIMEN_TYPES.plain;
+      const t0 = SPECIMEN_TYPES[site] ?? SPECIMEN_TYPES.plain;
+      const t = about ? { ...t0, about } : t0;
       const mat = new THREE.MeshStandardMaterial({ color: t.color, roughness: 0.6, emissive: t.color, emissiveIntensity: 0.0 });
       const mesh = m(new THREE.DodecahedronGeometry(0.11, 0), mat, x, terrain.heightAt(x, z) + 0.06, z);
       mesh.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
@@ -292,7 +295,15 @@ export class Specimens {
       const a = rnd() * Math.PI * 2, d = 35 + rnd() * 80;
       add(s.id, s.x + Math.cos(a) * d, s.z + Math.sin(a) * d);
     }
-    for (let k = 0; k < 16; k++) add("plain", rnd() * terrain.meta.width, rnd() * terrain.meta.depth);
+    for (const h of hot) {
+      // within one 18 m CRISM pixel of the hotspot, on walkable ground
+      for (let tries = 0; tries < 8; tries++) {
+        const n = this.list.length;
+        add("crism", h.x + (rnd() - 0.5) * 16, h.z + (rnd() - 0.5) * 16, h.about);
+        if (this.list.length > n) break;
+      }
+    }
+    for (let k = 0; k < (hot.length ? 8 : 16); k++) add("plain", rnd() * terrain.meta.width, rnd() * terrain.meta.depth);
   }
 
   nearest(x: number, z: number): { s: Specimen; d: number } | null {

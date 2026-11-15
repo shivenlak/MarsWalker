@@ -61,6 +61,30 @@ export const ROVER: TerrainProfile = {
   speedModel: "vehicle",
 };
 
+/** Curiosity itself, used only to validate the planner against the drives the rover team actually chose. */
+export const CURIOSITY: TerrainProfile = {
+  name: "Curiosity rover (validation)",
+  maxSlopeDeg: {
+    value: 30,
+    source: "ASSUMED: working drive-planning limit, kept well under MSL's 45 deg static tilt rating (NASA MSL rover page: 'withstand a tilt of 45 degrees in any direction without overturning').",
+  },
+  maxRoughM: {
+    value: 0.65,
+    source: "NASA MSL rover page: wheels 'can roll over obstacles approaching 65 centimeters'. Used as the RMS relief limit per 10 m cell.",
+  },
+  slopeWeight: 3,
+  roughWeight: 3,
+  uphillMetresPerMetre: { value: 3, source: "ASSUMED: same climb penalty as the crew buggy." },
+  flatSpeedKmh: { value: 0.1, source: "Curiosity's top speed ~0.14 km/h (NASA MSL rover page). Not used in the comparison metrics." },
+  speedModel: "vehicle",
+};
+
+/** A copy of a profile with a different slope limit (crew-capability slider). */
+export function withSlopeLimit(p: TerrainProfile, deg: number): TerrainProfile {
+  if (deg === p.maxSlopeDeg.value) return p;
+  return { ...p, name: `${p.name}, slope limit ${deg} deg`, maxSlopeDeg: { value: deg, source: `ASSUMED: user-set crew capability (default ${p.maxSlopeDeg.value} deg)` } };
+}
+
 export const BUGGY = {
   maxSpeedKmh: { value: 13, source: "Apollo LRV maximum speed ~13 km/h (LRV Operations Handbook)." } as Sourced<number>,
   rangeKm: { value: 90, source: "Apollo LRV design range 92 km on two 36 V silver-zinc batteries (LRV Operations Handbook)." } as Sourced<number>,
@@ -116,4 +140,12 @@ export const SURVIVAL = {
   hypoxiaS: { value: 60, source: "ASSUMED (game-forgiving): seconds of sim time from empty O2 to loss of life; real useful consciousness is shorter." } as Sourced<number>,
   shelterHours: { value: 30, source: "ASSUMED: emergency shelter kit supplies (O2, heat) for one Mars night plus margin." } as Sourced<number>,
   sepDoseMultiplier: { value: 20, source: "ILLUSTRATIVE: solar particle event raises the surface dose rate for a few hours; RAD has measured surface dose doubling (Sept 2017 event) - this game exaggerates it for play." } as Sourced<number>,
+};
+
+/** Dust storms (game event). Optical depth tau drives light and visibility in the renderer. */
+export const DUST = {
+  clearTau: { value: 0.6, source: "MSL Mastcam/REMS: Gale's background dust optical depth is typically ~0.3-1 outside storms (e.g. Lemmon et al. 2015, Icarus 251); 0.6 used." } as Sourced<number>,
+  stormPeakTau: { value: 4.5, source: "ASSUMED: a strong regional storm. For scale, the 2018 global storm peaked near tau ~8.5 at Gale (Guzewich et al. 2019, GRL 46)." } as Sourced<number>,
+  seasonLs: { value: [180, 330] as [number, number], source: "Large dust storms occur mainly in southern spring/summer, Ls ~180-330 (e.g. Kass et al. 2016, GRL 43)." } as Sourced<[number, number]>,
+  perSolChance: { value: 0.35, source: "ASSUMED for gameplay: chance of a regional storm reaching the site per EVA sol in dust season (x0.15 outside it). Real regional storms are far rarer." } as Sourced<number>,
 };

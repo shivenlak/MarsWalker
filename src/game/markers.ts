@@ -64,7 +64,11 @@ export class RouteRibbon {
     this.mesh.renderOrder = 2;
   }
 
+  /** Bumped on every set() so followers know to re-acquire the path. */
+  version = 0;
+
   set(path: P2[]) {
+    this.version++;
     this.pts = smoothPath(path, 1.5);
     const n = this.pts.length;
     const pos = new Float32Array(n * 2 * 3), along = new Float32Array(n * 2), side = new Float32Array(n * 2);
@@ -95,14 +99,27 @@ export class RouteRibbon {
     this.mesh.geometry = g;
   }
 
-  /** Distance along the ribbon of the point closest to (x, z), searching near the last hint. */
-  project(x: number, z: number): { along: number; dist: number; index: number } {
+  /**
+   * Distance along the ribbon of the point closest to (x, z). With a hint (a previous `along`), only the
+   * stretch from hint-back to hint+ahead is searched, so a route that doubles back on itself can't make
+   * the follower jump to the other leg.
+   */
+  project(x: number, z: number, hint?: number, back = 15, ahead = 40): { along: number; dist: number; index: number } {
     let best = Infinity, bi = 0;
     for (let i = 0; i < this.pts.length; i++) {
+      if (hint != null && (this.cum[i] < hint - back || this.cum[i] > hint + ahead)) continue;
       const d = (this.pts[i].x - x) ** 2 + (this.pts[i].z - z) ** 2;
       if (d < best) { best = d; bi = i; }
     }
+    if (best === Infinity) return this.project(x, z);
     return { along: this.cum[bi] ?? 0, dist: Math.sqrt(best), index: bi };
+  }
+
+  /** Unit direction of travel at `along`. */
+  tangentAt(along: number): P2 {
+    const a = this.pointAt(Math.max(0, along - 1)), b = this.pointAt(Math.min(this.length(), along + 1));
+    const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { x: (b.x - a.x) / l, z: (b.z - a.z) / l };
   }
 
   pointAt(along: number): P2 {

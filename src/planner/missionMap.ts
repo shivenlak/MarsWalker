@@ -4,13 +4,14 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { EVA, ROVER, SUIT, WALKING, type TerrainProfile } from "../core/config";
+import { CURIOSITY, EVA, RADIATION, ROVER, SUIT, WALKING, withSlopeLimit, type TerrainProfile } from "../core/config";
+import { compare, driveSegments, hazardAgreement, type Comparison, type DriveSegment } from "../core/compare";
 import { blockReason } from "../core/cost";
-import { lonLatToXY, xyToIdx } from "../core/grid";
+import { lonLatToXY, xyToIdx, xyToLonLat, type XY } from "../core/grid";
 import { nearestReachable, planRoute, routeThrough, type Leg, type Route, type Stop } from "../core/route";
 import { fmtClock, MARS_HOUR_S } from "../core/sun";
 import type { Overlays, StopInfo } from "../shared/data";
-import { loadOverlays, loadTraverse } from "../shared/data";
+import { loadLandmarks, loadOverlays, loadTraverse } from "../shared/data";
 import { fmtDist, fmtDur, sourceTag } from "../shared/format";
 import { setRoute, store } from "../shared/store";
 
@@ -21,6 +22,7 @@ export interface BriefingInfo {
   sunrise: string; sunset: string;
   weather: string; weatherSource: string;
   spaceWx: { level: string; text: string };
+  comm?: { distKm: number; oneWayS: number; sunAngleDeg: number };
 }
 
 interface ThemisMeta { bounds: Overlays["bounds"]; width: number; height: number; dn: number[] }
@@ -38,8 +40,17 @@ export class MissionMap {
   private fitted = false;
   mode: "briefing" | "map" = "briefing";
   profile: TerrainProfile = WALKING;
+  travel: "walk" | "buggy" = "walk";
   private extras = L.layerGroup();
+  private valLayer = L.layerGroup();
+  private order: string[] = [];     // visiting order of the included stops (scenario picker can change it)
+  private sunsetH = 18;
+  private drives: XY[][] = [];
+  private segs: DriveSegment[] = [];
+  private comps: Map<number, Comparison | null> = new Map();
   startHour = 9;
+  /** fired when the crew slope limit changes so the game can re-plan live */
+  onCapability: (() => void) | null = null;
 
   onNavigate: ((p: LL, label: string) => void) | null = null;
   onBegin: (() => void) | null = null;
@@ -58,11 +69,15 @@ export class MissionMap {
         </div>
         <section class="mm-brief"></section>
         <section><h3>Travel</h3><div class="seg mm-prof"><button data-p="walk" class="on">On foot</button><button data-p="buggy">Buggy</button></div>
-          <p class="note mm-prof-note"></p></section>
+          <p class="note mm-prof-note"></p>
+          <label class="mm-cap">Crew slope limit <b class="mm-cap-v">25&deg;</b>
+            <input type="range" min="12" max="30" step="1" value="25"></label>
+          <p class="src mm-cap-note">Lower it for a tired or injured crew member, a stretcher carry, or a heavy tool load: A* re-plans live.</p></section>
         <section><h3>Science stops</h3><div class="mm-stops"></div>
           <p class="note">Crew: ${WALKING.name}. Router limits: slope ${WALKING.maxSlopeDeg.value}&deg; ${sourceTag(WALKING.maxSlopeDeg)},
           roughness ${WALKING.maxRoughM.value} m ${sourceTag(WALKING.maxRoughM)}.</p></section>
-        <section><h3>EVA budget</h3><div class="mm-budget"></div></section>
+        <section><h3>EVA budget</h3><div class="mm-budget"></div>
+          <div class="mm-tools"><button class="btn small mm-scen">Compare scenarios</button><button class="btn small mm-val">Validate vs Curiosity</button></div></section>
         <section class="mm-detail-wrap"><h3>Selection</h3><div class="mm-detail"><p class="note">Click a route leg, a stop, or any point on the map.</p></div></section>
         <section><h3>Layers</h3><div class="mm-layers"></div></section>
         <div class="mm-begin"></div>
@@ -87,16 +102,34 @@ export class MissionMap {
     this.routeLayer.addTo(this.map);
     this.extras.addTo(this.map);
     this.liveLayer.addTo(this.map);
+    this.valLayer.addTo(this.map);
     this.el.querySelectorAll<HTMLButtonElement>(".mm-prof button").forEach((b) => (b.onclick = () => this.setProfile(b.dataset.p === "buggy" ? ROVER : WALKING)));
+    const cap = this.el.querySelector<HTMLInputElement>(".mm-cap input")!;
+    cap.oninput = () => {
+      store.crewSlopeDeg = +cap.value;
+      this.el.querySelector(".mm-cap-v")!.innerHTML = `${cap.value}&deg;`;
+      if (this.travel === "walk") this.setProfile(WALKING);
+      this.onCapability?.();
+    };
+    this.el.querySelector<HTMLButtonElement>(".mm-scen")!.onclick = () => this.scenarios();
+    this.el.querySelector<HTMLButtonElement>(".mm-val")!.onclick = () => this.validate();
+    // Curiosity's drives (projected) + its dated stops, for the planner validation
+    const trav = await loadTraverse();
+    this.drives = trav.features.map((f) => (f.geometry as GeoJSON.LineString).coordinates.map(([lon, lat]) => lonLatToXY({ lon, lat })));
+    const lms = await loadLandmarks();
+    this.segs = driveSegments(this.drives, lms.map((l) => ({ id: l.id, sol: l.sol, ...lonLatToXY(l) })));
     this.renderStopList();
     this.map.on("click", (e: L.LeafletMouseEvent) => this.readout(e.latlng));
     this.replan();
   }
 
   setProfile(p: TerrainProfile) {
-    this.profile = p;
-    this.el.querySelectorAll<HTMLButtonElement>(".mm-prof button").forEach((b) => b.classList.toggle("on", (b.dataset.p === "buggy") === (p === ROVER)));
-    this.el.querySelector(".mm-prof-note")!.innerHTML = p === ROVER
+    this.travel = p === ROVER ? "buggy" : "walk";
+    this.profile = this.travel === "buggy" ? ROVER : withSlopeLimit(WALKING, store.crewSlopeDeg);
+    this.el.querySelectorAll<HTMLButtonElement>(".mm-prof button").forEach((b) => b.classList.toggle("on", (b.dataset.p === "buggy") === (this.travel === "buggy")));
+    this.el.querySelector<HTMLElement>(".mm-cap")!.hidden = this.travel === "buggy";
+    this.el.querySelector<HTMLElement>(".mm-cap-note")!.hidden = this.travel === "buggy";
+    this.el.querySelector(".mm-prof-note")!.innerHTML = this.travel === "buggy"
       ? `A* with buggy limits: slope ${ROVER.maxSlopeDeg.value}&deg; ${sourceTag(ROVER.maxSlopeDeg)}, relief ${ROVER.maxRoughM.value} m ${sourceTag(ROVER.maxRoughM)}, ${ROVER.flatSpeedKmh.value} km/h ${sourceTag(ROVER.flatSpeedKmh)}. Sites the buggy can't reach get a park point; walk the rest.`
       : `A* with walking limits (below).`;
     this.replan();
@@ -156,6 +189,8 @@ export class MissionMap {
         source: ov.slope.source, legend: "green <10&deg; · yellow 10-20&deg; · red 20-30&deg; · dark >30&deg;" },
       { name: "Elevation (hillshade)", layer: L.imageOverlay(ov.hillshade.file, bb(ov.bounds)) as L.Layer, on: false, opacity: 0.6,
         source: ov.hillshade.source, legend: `${ov.hillshade.elevMin.toFixed(0)} m (blue) to ${ov.hillshade.elevMax.toFixed(0)} m (tan)` },
+      ...(store.crism ? [{ name: "Minerals (CRISM hydration)", layer: L.imageOverlay(store.crism.stretched().toDataURL(), bb(store.crism.meta.bounds)) as L.Layer, on: false, opacity: 0.7,
+        source: `${store.crism.meta.source} Observed ${store.crism.meta.observed}. Contrast-stretched per band for visibility.`, legend: store.crism.meta.legend }] : []),
       { name: "Thermal (THEMIS day IR)", layer: L.imageOverlay(ov.themis.file, bb(ov.themis.bounds)) as L.Layer, on: false, opacity: 0.5,
         source: ov.themis.source, legend: "blue = cooler by day, orange = warmer (relative, ~81 m/px)" },
     ];
@@ -212,32 +247,38 @@ export class MissionMap {
       <label class="stop-row"><input type="checkbox" data-id="${s.id}" ${DEFAULT.has(s.id) ? "checked" : ""}>
         <span class="pin-inline">${store.stops.indexOf(s)}</span> ${s.name}</label>`).join("");
     el.querySelectorAll<HTMLInputElement>("input").forEach((cb) => {
-      cb.onchange = () => { cb.checked ? this.included.add(cb.dataset.id!) : this.included.delete(cb.dataset.id!); this.replan(); };
+      cb.onchange = () => { cb.checked ? this.included.add(cb.dataset.id!) : this.included.delete(cb.dataset.id!); this.order = []; this.replan(); };
     });
   }
 
-  private replan() {
+  /** Included stops in visiting order (the scenario picker can reorder them). */
+  private targets(): StopInfo[] {
+    const sci = store.stops.filter((s) => s.kind === "science" && this.included.has(s.id));
+    const rank = (s: StopInfo) => { const i = this.order.indexOf(s.id); return i < 0 ? 1000 + store.stops.indexOf(s) : i; };
+    return sci.sort((a, b) => rank(a) - rank(b));
+  }
+
+  /** A* plan base -> targets (in order) -> base, on foot or by buggy (park and walk where it can't reach). */
+  private buildRoute(travel: "walk" | "buggy", targets: Stop[]): Route | null {
+    if (!targets.length) return null;
     const base = store.stops.find((s) => s.kind === "base")!;
-    const targets = store.stops.filter((s) => s.kind === "science" && this.included.has(s.id));
-    let r: Route | null = null;
-    if (targets.length) {
-      if (this.profile === ROVER) {
-        // drive to each site, or to the closest point the buggy can reach (then walk)
-        const order: Stop[] = [base];
-        const notes: string[] = [];
-        for (const t of targets) {
-          const direct = routeThrough(store.grid!, [order[order.length - 1], t], ROVER);
-          if (direct.legs.length) { order.push(t); continue; }
-          const park = nearestReachable(store.grid!, base, t, ROVER);
-          if (park) { order.push({ ...park.stop, name: `${t.name.split(" - ")[0]} (park, walk ${park.gapM.toFixed(0)} m)` }); notes.push(`${t.name.split(" - ")[0]}: buggy parks ${park.gapM.toFixed(0)} m away, walk the rest`); }
-        }
-        order.push(base);
-        r = routeThrough(store.grid!, order, ROVER, targets.length);
-        r.warnings = [...notes, ...r.warnings.filter((w) => !w.startsWith("No safe path"))];
-      } else {
-        r = planRoute(store.grid!, base, targets, WALKING);
-      }
+    if (travel === "walk") return planRoute(store.grid!, base, targets, withSlopeLimit(WALKING, store.crewSlopeDeg));
+    const order: Stop[] = [base];
+    const notes: string[] = [];
+    for (const t of targets) {
+      const direct = routeThrough(store.grid!, [order[order.length - 1], t], ROVER);
+      if (direct.legs.length) { order.push(t); continue; }
+      const park = nearestReachable(store.grid!, base, t, ROVER);
+      if (park) { order.push({ ...park.stop, name: `${t.name.split(" - ")[0]} (park, walk ${park.gapM.toFixed(0)} m)` }); notes.push(`${t.name.split(" - ")[0]}: buggy parks ${park.gapM.toFixed(0)} m away, walk the rest`); }
     }
+    order.push(base);
+    const r = routeThrough(store.grid!, order, ROVER, targets.length);
+    r.warnings = [...notes, ...r.warnings.filter((w) => !w.startsWith("No safe path"))];
+    return r;
+  }
+
+  private replan() {
+    const r = this.buildRoute(this.travel, this.targets());
     setRoute(r);
     this.drawRoute(r);
     this.renderBudget(r);
@@ -327,7 +368,8 @@ export class MissionMap {
           <div><span>${g.rough[i].toFixed(2)} m</span>roughness (RMS)</div>
           ${themis}
         </div>
-        <p class="${why ? "warn" : "ok-text"}">${why ? `Blocked for walking: ${why}` : "Passable for the walking profile"}</p>
+        ${(() => { const r = store.crism?.at(ll.lng, ll.lat); return r ? `<p class="note"><b>CRISM (orbit, 18 m):</b> ${r.label} · ${r.strength}<br><span class="src">SINDEX2 ${r.sindex2.toFixed(4)} · BD2100 ${r.bd2100.toFixed(4)} · BD1900 ${r.bd1900.toFixed(4)}</span></p>` : ""; })()}
+        <p class="${why ? "warn" : "ok-text"}">${why ? `Blocked for ${this.travel === "buggy" ? "the buggy" : "walking"}: ${why}` : `Passable ${this.travel === "buggy" ? "for the buggy" : "on foot"} (${this.profile.maxSlopeDeg.value}&deg; limit)`}</p>
         <p class="src">${ll.lat.toFixed(5)}&deg;, ${ll.lng.toFixed(5)}&deg; · 10 m cell from the USGS 1 m DTM</p>
         ${this.mode === "map" ? `<button class="btn nav-btn" ${why ? "disabled" : ""}>Navigate here (A*)</button>` : ""}
       </div>`, () => this.onNavigate?.({ lon: ll.lng, lat: ll.lat }, "Waypoint"));
@@ -346,19 +388,21 @@ export class MissionMap {
     if (!r) { el.innerHTML = `<p class="note">Select at least one stop.</p>`; return; }
     const t = r.totals;
     const over = t.evaS > EVA.maxDurationH.value * 3600;
+    const broken = r.warnings.some((w) => w.startsWith("No safe path"));
     const endH = this.startHour + t.evaS / MARS_HOUR_S;
     el.innerHTML = `
+      ${broken ? `<p class="infeasible">&#9888; NOT FEASIBLE with these limits: some stops can't be reached safely (see below). Totals cover only the reachable legs.</p>` : ""}
       <div class="kpis">
         <div><span>${fmtDist(t.distM)}</span>distance (3D)</div>
         <div><span>+${t.climbM.toFixed(0)} / -${t.descentM.toFixed(0)} m</span>climb / descent</div>
-        <div><span>${fmtDur(t.walkS)}</span>${this.profile === ROVER ? "driving" : "walking"}</div>
+        <div><span>${fmtDur(t.walkS)}</span>${this.travel === "buggy" ? "driving" : "walking"}</div>
         <div class="${over ? "bad" : ""}"><span>${fmtDur(t.evaS)}</span>total EVA</div>
       </div>
       <table class="legs"><tr><th>Leg</th><th>Dist</th><th>Climb</th><th>Time</th></tr>
         ${r.legs.map((l, i) => `<tr data-leg="${i}"><td>${this.stopName(l.fromId)} &rarr; ${this.stopName(l.toId)}</td><td>${fmtDist(l.distM)}</td>
           <td>+${l.climbM.toFixed(0)} m</td><td>${fmtDur(l.walkS)}</td></tr>`).join("")}
       </table>
-      <p class="note">${this.profile === ROVER ? `Buggy ${ROVER.flatSpeedKmh.value} km/h on flat, slower on grades ${sourceTag(ROVER.flatSpeedKmh)}` : `Pace ${WALKING.flatSpeedKmh.value} km/h on flat, Tobler-shaped on grades ${sourceTag(WALKING.flatSpeedKmh)}`} ·
+      <p class="note">${this.travel === "buggy" ? `Buggy ${ROVER.flatSpeedKmh.value} km/h on flat, slower on grades ${sourceTag(ROVER.flatSpeedKmh)}` : `Pace ${WALKING.flatSpeedKmh.value} km/h on flat, Tobler-shaped on grades ${sourceTag(WALKING.flatSpeedKmh)}`} ·
         ${EVA.stopDwellMin.value} min per stop ${sourceTag(EVA.stopDwellMin)} · EVA limit ${EVA.maxDurationH.value} h ${sourceTag(EVA.maxDurationH)} ·
         suit ${SUIT.capacityH.value} h incl. ${SUIT.reserveH.value * 60} min reserve ${sourceTag(SUIT.capacityH)}.
         Back at base ~${fmtClock(endH)} local (Mars hours ≈ Earth hours × 1.027).</p>
@@ -371,6 +415,8 @@ export class MissionMap {
 
   private renderBrief(b: BriefingInfo) {
     const sw = b.spaceWx;
+    const [sh, sm] = b.sunset.split(":").map(Number);
+    if (isFinite(sh)) this.sunsetH = sh + (sm || 0) / 60;
     this.el.querySelector(".mm-brief")!.innerHTML = `
       <h3>Conditions</h3>
       <div class="kpis small">
@@ -381,6 +427,7 @@ export class MissionMap {
       </div>
       <p class="note">${b.dateText}. ${b.weather} <span class="tag sourced" title="${b.weatherSource}">sourced</span></p>
       <p class="note">${sw.text} <span class="tag ${sw.level === "unknown" ? "assumed" : "sourced"}" title="NASA CCMC DONKI snapshot">DONKI</span></p>
+      ${b.comm ? `<p class="note"><b>Earth link:</b> ${(b.comm.distKm / 1e6).toFixed(0)} million km, <b>${fmtDur(b.comm.oneWayS)}</b> one-way light time (${fmtDur(2 * b.comm.oneWayS)} round trip). Mission Control can't steer this EVA in real time, so the crew needs an onboard planner. <span class="tag sourced" title="JPL Approximate Positions of the Planets (Standish), checked against the 2003 and 2020 close approaches">JPL</span></p>` : ""}
       <label class="start-time">EVA start (local true solar time)
         <select>${[7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((h) => `<option value="${h}" ${h === this.startHour ? "selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("")}</select>
       </label>`;
@@ -393,5 +440,108 @@ export class MissionMap {
     if (this.mode !== "briefing") { el.innerHTML = ""; return; }
     el.innerHTML = `<button class="btn big" ${store.route ? "" : "disabled"}>BEGIN EVA &rarr;</button>`;
     el.querySelector<HTMLButtonElement>("button")!.onclick = () => this.onBegin?.();
+  }
+
+  // ---------- what-if scenarios ----------
+  /**
+   * Same science, different plans: every visiting order x {on foot, buggy} x start times. Each row is a
+   * full A* plan with time, distance, climb, steepest cell, suit use, dose and daylight margin, so a crew
+   * can see the trade-offs before committing. "Use" applies the order, travel mode and start time.
+   */
+  scenarios() {
+    const tg = this.targets();
+    if (!tg.length) { this.detail(`<p class="note">Select at least one stop first.</p>`); return; }
+    const perms = (a: StopInfo[]): StopInfo[][] => a.length <= 1 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map((p) => [x, ...p]));
+    const orders = perms(tg).slice(0, 24);
+    type Row = { order: StopInfo[]; travel: "walk" | "buggy"; start: number; r: Route; endH: number; marginH: number; suitPct: number; doseUSv: number; maxSlope: number; score: number };
+    const rows: Row[] = [];
+    const t0 = performance.now();
+    for (const travel of ["walk", "buggy"] as const) for (const order of orders) {
+      const r = this.buildRoute(travel, order);
+      if (!r || !r.legs.length || r.warnings.some((w) => w.startsWith("No safe path"))) continue;
+      const maxSlope = Math.max(...r.points.map((p) => p.slope));
+      // consumables: walking at ~1.0x nominal, seated driving at rest rate (SUIT.metabolic), stops at rest
+      const met = travel === "buggy" ? SUIT.metabolic.value.rest : SUIT.metabolic.value.flat;
+      const usedH = (r.totals.walkS * met + r.totals.dwellS * SUIT.metabolic.value.rest) / 3600;
+      for (const start of [7, 9, 12, 15]) {
+        const endH = start + r.totals.evaS / MARS_HOUR_S;
+        const marginH = this.sunsetH - endH;
+        const suitPct = (usedH / SUIT.capacityH.value) * 100;
+        const doseUSv = RADIATION.surfaceDoseMSvPerDay.value * 1000 * r.totals.evaS / 86400;
+        // lower is better: time, plus heavy penalties for ending after sunset or eating into the reserve
+        const score = r.totals.evaS / 3600 + (marginH < 0.5 ? 10 + (0.5 - marginH) * 5 : 0) + (suitPct > 90 ? 10 : 0) + maxSlope / 30;
+        rows.push({ order, travel, start, r, endH, marginH, suitPct, doseUSv, maxSlope, score });
+      }
+    }
+    const ms = performance.now() - t0;
+    rows.sort((a, b) => a.score - b.score);
+    // one row per (order, travel) at its best start time; keep the best walking and buggy plans side by side
+    const seen = new Set<string>();
+    const best = rows.filter((w) => { const k = w.travel + w.order.map((q) => q.id).join(); if (seen.has(k)) return false; seen.add(k); return true; });
+    const top = [...best.filter((w) => w.travel === "buggy").slice(0, 4), ...best.filter((w) => w.travel === "walk").slice(0, 4)].sort((a, b) => a.score - b.score);
+    const nm = (s: StopInfo) => String(store.stops.indexOf(s));
+    this.detail(`
+      <div class="card"><h4>What-if scenarios</h4>
+        <p class="note">${orders.length} visiting orders &times; on foot / buggy &times; 4 start times = ${rows.length} full A* plans in ${ms.toFixed(0)} ms. Best start time per plan, best first.</p>
+        <table class="legs scen"><tr><th></th><th>Order</th><th>Window</th><th>EVA</th><th>Dark in</th><th>Suit</th><th></th></tr>
+        ${top.map((w, i) => `<tr class="${w.marginH < 0 ? "bad" : ""}" title="steepest cell ${w.maxSlope.toFixed(0)}°, dose ${w.doseUSv.toFixed(0)} µSv"><td>${w.travel === "buggy" ? "&#9635;" : "&#9673;"}</td>
+          <td>${w.order.map(nm).join("&rarr;")}</td><td>${fmtClock(w.start)}&ndash;${fmtClock(w.endH)}</td>
+          <td>${fmtDur(w.r.totals.evaS)}</td>
+          <td>${w.marginH >= 0 ? "+" : ""}${w.marginH.toFixed(1)} h</td><td>${w.suitPct.toFixed(0)}%</td>
+          <td><button class="use" data-i="${i}">Use</button></td></tr>`).join("")}
+        </table>
+        <p class="src">&#9635; buggy &nbsp; &#9673; on foot · hover a row for its steepest cell and radiation dose.</p>
+        <p class="src">Sunset ${fmtClock(this.sunsetH)} LTST from the REMS analogue sol. Suit = consumables used vs ${SUIT.capacityH.value} h capacity ${sourceTag(SUIT.capacityH)}
+          (seated driving at the rest rate). Dose ${RADIATION.surfaceDoseMSvPerDay.value} mSv/day ${sourceTag(RADIATION.surfaceDoseMSvPerDay)}.
+          Ranking: EVA hours + penalties for ending &lt; 30 min before sunset or using &gt; 90% of the suit, + steepness.</p>
+      </div>`);
+    this.el.querySelectorAll<HTMLButtonElement>(".scen .use").forEach((b) => (b.onclick = () => {
+      const w = top[+b.dataset.i!];
+      this.order = w.order.map((s) => s.id);
+      this.startHour = w.start;
+      const sel = this.el.querySelector<HTMLSelectElement>(".start-time select");
+      if (sel) sel.value = String(w.start);
+      this.setProfile(w.travel === "buggy" ? ROVER : WALKING);
+      this.onTravel?.(w.travel, w.start);
+    }));
+  }
+  onTravel: ((t: "walk" | "buggy", startHour: number) => void) | null = null;
+
+  // ---------- validation against Curiosity ----------
+  validate(pick = -1) {
+    if (!this.segs.length) { this.detail(`<p class="note">Curiosity's traverse isn't loaded.</p>`); return; }
+    const h = hazardAgreement(store.grid!, this.drives, CURIOSITY);
+    const hw = hazardAgreement(store.grid!, this.drives, this.travel === "buggy" ? ROVER : this.profile);
+    const get = (i: number) => { if (!this.comps.has(i)) this.comps.set(i, compare(store.grid!, this.segs[i])); return this.comps.get(i)!; };
+    const all = this.segs.map((_, i) => get(i)).filter((c): c is Comparison => !!c);
+    const mean = (f: (c: Comparison) => number) => all.reduce((a, c) => a + f(c), 0) / Math.max(all.length, 1);
+    this.valLayer.clearLayers();
+    const ll = (p: XY[]) => p.map((q) => { const g = xyToLonLat(q); return [g.lat, g.lon] as [number, number]; });
+    const sel = pick >= 0 ? get(pick) : null;
+    if (sel) {
+      L.polyline(ll(sel.seg.path), { color: "#ffd27a", weight: 6, opacity: 0.95 }).bindTooltip(`Curiosity, sols ${sel.seg.from.sol}-${sel.seg.to.sol}`).addTo(this.valLayer);
+      L.polyline(ll(sel.astar), { color: "#00e5ff", weight: 4, opacity: 0.95, dashArray: "8 6" }).bindTooltip("Our A*").addTo(this.valLayer);
+      this.map.fitBounds(L.latLngBounds([...ll(sel.seg.path), ...ll(sel.astar)]).pad(0.3));
+    }
+    this.detail(`
+      <div class="card"><h4>Validation: our planner vs Curiosity</h4>
+        <p class="note">Curiosity's team picked every drive with full HiRISE and Navcam knowledge. Does our hazard map agree with where they actually drove?</p>
+        <div class="kpis small">
+          <div><span>${h.driveKm.toFixed(1)} km</span>Curiosity drives in the area</div>
+          <div><span>${h.drivePassablePct.toFixed(1)}%</span>of them on cells we rate passable (rover limits)</div>
+          <div><span>${h.areaNoGoPct.toFixed(1)}%</span>of the whole area is no-go</div>
+          <div class="good"><span>${h.avoidance.toFixed(0)}&times;</span>no-go cells avoided vs chance</div>
+        </div>
+        <p class="note">With the current ${this.travel === "buggy" ? "buggy" : "walking"} limits (${(this.travel === "buggy" ? ROVER : this.profile).maxSlopeDeg.value}&deg;), ${hw.drivePassablePct.toFixed(1)}% of Curiosity's path is passable, ${hw.areaNoGoPct.toFixed(1)}% of the area is no-go.</p>
+        <h4 style="margin-top:10px">Stop-to-stop: A* vs the real drive</h4>
+        <table class="legs val"><tr><th>Sols</th><th>Curiosity</th><th>A*</th><th>Mean gap</th><th>Straight-line gap</th></tr>
+          ${this.segs.map((sg, i) => { const c = get(i); return c ? `<tr data-i="${i}" class="${i === pick ? "on" : ""}"><td>${sg.from.sol}&rarr;${sg.to.sol}</td><td>${fmtDist(c.curiosityM)}</td><td>${fmtDist(c.astarM)}</td><td>${c.meanDevM.toFixed(0)} m</td><td>${c.straightDevM.toFixed(0)} m</td></tr>` : ""; }).join("")}
+        </table>
+        <p class="note">Mean over ${all.length} segments: A* is ${mean((c) => c.meanDevM).toFixed(0)} m from Curiosity's line (a straight line: ${mean((c) => c.straightDevM).toFixed(0)} m).
+          Honest read: on these short, mostly benign hops a straight line is about as close; where the rover drove much farther than A* (e.g. sols 4151&rarr;4342: ${fmtDist(this.segs.findIndex((x) => x.from.sol === 4151) >= 0 ? get(this.segs.findIndex((x) => x.from.sol === 4151))?.curiosityM ?? 0 : 0)}) it was doing science along the way, not avoiding hazards.
+          The strong signal is the hazard map: the rover stayed off our no-go cells ${h.avoidance.toFixed(0)}&times; more than chance.</p>
+        <p class="src">Curiosity profile: slope ${CURIOSITY.maxSlopeDeg.value}&deg; ${sourceTag(CURIOSITY.maxSlopeDeg)}, relief ${CURIOSITY.maxRoughM.value} m ${sourceTag(CURIOSITY.maxRoughM)}. Drives: NASA/JPL-Caltech MSL traverse (MMGIS), cut between Curiosity's dated stops. Click a row to see both lines.</p>
+      </div>`);
+    this.el.querySelectorAll<HTMLTableRowElement>(".val tr[data-i]").forEach((tr) => (tr.onclick = () => this.validate(+tr.dataset.i!)));
   }
 }

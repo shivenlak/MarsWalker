@@ -5,12 +5,13 @@
  "originY": -282970.075189438,
  "yRef": -3579,
  "height": {
-  "file": "world/height.bin",
+  "file": "world/height.delta.gz",
   "cols": 1190,
   "rows": 1665,
   "spacing": 2,
   "min": -3949.0146484375,
-  "max": -3323.348388671875
+  "max": -3323.348388671875,
+  "encoding": "row-delta-int16-gzip"
  },
  "chunkSize": 512,
  "colorMpp": 0.5,
@@ -315,5 +316,6 @@
   "normals": "Derived from USGS MSL Gale DEM Mosaic 1m v3 (1 m)",
   "backdrop": "USGS/DLR/ESA HRSC-MOLA blended DEM global 200 m v2 (Fergason et al. 2018)",
   "backdropColor": "Viking MDIM 2.1 colour mosaic via NASA Mars Trek, colour-matched to HiRISE"
- }
+ },
+ "chunkExt": "webp"
 }

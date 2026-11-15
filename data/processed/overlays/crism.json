@@ -1,0 +1,36 @@
+{
+ "file": "overlays/crism_hyd.png",
+ "product": "FRT000058A3_07_BRHYDJ_MTR3",
+ "observed": "2007-04-22",
+ "bounds": {
+  "north": -4.77377670107711,
+  "south": -4.8302594861419905,
+  "west": 137.3738077159323,
+  "east": 137.41419594396257
+ },
+ "width": 133,
+ "height": 186,
+ "bands": [
+  "SINDEX2",
+  "BD2100_2",
+  "BD1900_2"
+ ],
+ "scale": [
+  9.5991e-05,
+  7.6784e-05,
+  0.00018481
+ ],
+ "offset": [
+  0.005,
+  0.0,
+  0.0
+ ],
+ "p95": {
+  "SINDEX2": 0.0097,
+  "BD2100_2": 0.0043,
+  "BD1900_2": 0.00166
+ },
+ "legend": "magenta = polyhydrated sulfates \u00b7 yellow/green = monohydrated sulfates \u00b7 blue = other hydrated minerals (product label; spectra needed for positive ID)",
+ "source": "MRO CRISM MTRDR HYD browse (SINDEX2 / BD2100_2 / BD1900_2), FRT000058A3, PDS Geosciences Node; parameters per Viviano-Beck et al. 2014, JGR Planets 119. NASA/JPL/JHUAPL.",
+ "url": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/browse/2007/2007_112/frt000058a3/frt000058a3_07_brhydj_mtr3.png"
+}

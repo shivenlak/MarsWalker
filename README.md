@@ -10,6 +10,17 @@ images, and watch your suit consumables and point of no return as you go.
 **Story:** *Water on Mount Sharp, twice.* Walk from base to the Gediz Vallis channel (flood debris, the first pure
 sulfur found on Mars), then to the boxwork ridges (ancient groundwater in fractures), and get back with margin.
 
+**Live:** deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`
+(enable it once under *Settings → Pages → Source: GitHub Actions*). Add `?demo` to the URL for the self-running 3-minute tour.
+
+### Highlights
+- **Validated against Curiosity:** on 9.8 km of Curiosity's real drives, the rover stayed off our A* no-go terrain ~15× more than chance (`src/core/compare.ts`).
+- **What-if scenarios:** every stop order × on foot / buggy × start time, as full A* plans in ~250 ms, ranked by time, daylight and suit margin.
+- **Crew capability slider:** lower the slope limit for an injured crew member and watch A* re-plan (or say NOT FEASIBLE).
+- **CRISM minerals from orbit:** MRO hydrated-sulfate map draped on the terrain; the spectrometer's targets come from it.
+- **Real Earth light-time:** reports to Earth wait 3–22 min each way (11 min today), computed from JPL planetary elements.
+- **EV2 buddy, dust storms, photo mode, guided demo, touch controls and WebXR VR.**
+
 ## Run it
 
 ```bash
@@ -17,11 +28,12 @@ npm install
 npm run dev          # open http://localhost:5173
 ```
 
-All data (~39 MB) is preprocessed and committed in `data/processed/`, so the game runs **offline** with no API calls.
+All data (~35 MB) is preprocessed and committed in `data/processed/`, so the game runs **offline** with no API calls.
 
 ```bash
-npm test             # 20 tests: A* (incl. the 10x10 wall), walking + buggy routes and park-and-walk on real terrain,
-                     # suit/PNR, survival model, Mars clock vs REMS
+npm test             # 26 tests: A* (incl. the 10x10 wall), walking + buggy routes and park-and-walk on real terrain,
+                     # suit/PNR, survival model, Mars clock vs REMS, Earth-Mars distance vs NASA close approaches,
+                     # A* / hazard map vs Curiosity's real drives
 npm run build        # type-check + production build into dist/
 ```
 
@@ -46,6 +58,9 @@ npm run build        # type-check + production build into dist/
 | **L / Z / X** | helmet lamps / gold sun visor / wipe visor | |
 | **M / J / Esc** | mission map / journal / pause menu | |
 | **[ ]** · **H** · **Click** | time warp · A* path home · terrain scan (**N** = navigate there) | |
+| **R** | send EV2 (your buddy) to fetch the nearest specimen on its own A* route | EV2 rides along |
+| **C** | photo mode: free camera, sun time, lens, Space = save PNG | |
+| **Touch / VR** | joystick + buttons on phones and tablets · *Enter VR* on WebXR headsets (left stick moves, right trigger = autopilot) | |
 
 **Survival:** the suit's O₂/water/power drain faster when you work hard, carry samples, or run the heater. Gale nights fall to about −73 °C (REMS). Falls above ~2 m hurt. A solar particle event can arrive with a 20-minute warning. Dust devils coat your visor. The buggy can roll over on side slopes. The habitat recharges you; the shelter gets you through a night.
 
@@ -66,17 +81,22 @@ Rocks are scattered procedurally with density driven by the DTM roughness grid. 
 3. **Edge cost:** 3D distance × slope multiplier × roughness multiplier, + 8 m per metre climbed.
 4. **A*:** 8-connected, straight-line heuristic (admissible). Plan = base → stops → base (~20–50 ms).
 5. **Live:** in the game, A* re-plans from your position whenever you leave the route by more than 15 m. The path home (point of no return) is recomputed every 2 s.
+6. **Autopilot:** the walker rides the route by distance along it, and the buggy runs its physics in fixed 50 ms steps, so both stay on the A* line at any time warp.
+7. **Validation:** `npx vitest run src/core/compare.test.ts` prints A* vs Curiosity per segment, plus the hazard-map agreement.
 
 ## Repo layout
 
 ```
-scripts/          offline data pipeline (Python): build_terrain, build_world, fetch_basemap, fetch_rover, fetch_conditions
+scripts/          offline data pipeline (Python): build_terrain, build_world, fetch_basemap, fetch_crism, fetch_rover,
+                  fetch_conditions, optimize_web (WebP + delta-gzip heights)
 data/processed/   web-ready data served at the site root (terrain grid, 3D world chunks, tiles, POV images, conditions)
-src/core/         pure logic, no UI: config (every number + source), grid, astar, cost, route, nav, sun, suit (+ tests)
+src/core/         pure logic, no UI: config (every number + source), grid, astar, cost, route, nav, sun, suit,
+                  compare (validation vs Curiosity), space (Earth-Mars light time) (+ tests)
 src/game/         Three.js game: terrain, sky, astronaut (IK), player, buggy, props (habitat, Curiosity, shelter,
-                  rocks, specimens, dust devils, tracks), helmet, effects, markers, hud, menus, screens, audio, game loop
+                  rocks, specimens, dust devils, tracks), buddy (EV2), helmet, effects, markers, hud, menus, screens,
+                  photo, demo (guided tour), touch, xr (WebXR), audio, game loop
 src/planner/      mission map (Leaflet): briefing, stop selection, budget, leg profiles, terrain readout
-src/shared/       data loading, conditions (REMS/DONKI), store, formatting
+src/shared/       data loading, conditions (REMS/DONKI), crism (MRO mineral map), store, formatting
 ```
 
 ### Rebuild the data (optional, needs internet, a few minutes)
@@ -94,4 +114,4 @@ NASA_API_KEY=<your free key> .venv/bin/python scripts/fetch_conditions.py   # DE
 
 Credits: NASA/JPL-Caltech/UArizona (HiRISE), USGS Astrogeology (MSL Gale DEM, Calef & Parker 2016; HRSC-MOLA blend,
 Fergason et al. 2018), ESA/DLR/FU Berlin (HRSC), NASA/JPL-Caltech/MSSS (Curiosity images), CAB (CSIC-INTA) (REMS),
-ASU (THEMIS), NASA Mars Trek (Viking MDIM 2.1), NASA CCMC (DONKI), Hassler et al. 2014 (RAD).
+ASU (THEMIS), NASA/JPL/JHUAPL (CRISM, via PDS Geosciences Node), NASA Mars Trek (Viking MDIM 2.1), NASA CCMC (DONKI), Hassler et al. 2014 (RAD).

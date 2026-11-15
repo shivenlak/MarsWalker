@@ -33,6 +33,7 @@ export interface DriveInput { throttle: number; steer: number; brake: boolean }
 export class Buggy {
   readonly root = new THREE.Group();     // chassis frame origin at axle-centre height
   readonly seat = new THREE.Object3D();  // driver seat anchor
+  readonly seat2 = new THREE.Object3D(); // passenger seat anchor
   private wheels: { g: THREE.Group; spin: THREE.Group; fx: number; fz: number }[] = [];
   readonly lights: THREE.SpotLight[] = [];
   x = 0; z = 0; y = 0;
@@ -72,6 +73,8 @@ export class Buggy {
     }
     this.seat.position.set(-0.33, 0.05 + 0.25, 0.32);
     R.add(this.seat);
+    this.seat2.position.set(0.33, 0.05 + 0.25, 0.32);
+    R.add(this.seat2);
     // control & display console, hand controller
     body.add(m(new RoundedBoxGeometry(0.5, 0.35, 0.18, 2, 0.03), whiteMat, 0, 0.42, -0.35));
     body.add(m(new THREE.BoxGeometry(0.3, 0.14, 0.01), screenMat, 0, 0.47, -0.445));
@@ -167,7 +170,8 @@ export class Buggy {
     const maxV = (BUGGY.maxSpeedKmh.value * 1000) / 3600;
     // steering eases off at speed; 4-wheel steering halves the turning radius
     const steerTarget = input.steer * 0.55 * (1 - 0.45 * Math.min(Math.abs(this.speed) / maxV, 1));
-    this.steer += (steerTarget - this.steer) * Math.min(1, dtReal * 4);
+    // eased in sim time (at least real time) so the wheels keep up with the motion under time warp
+    this.steer += (steerTarget - this.steer) * Math.min(1, Math.max(dtReal, dtSim) * 4);
     const gnd = this.groundY();
     // traction: grade along the heading (positive = climbing when moving forward)
     const grade = Math.tan(gnd.pitch);
@@ -240,9 +244,9 @@ export class Buggy {
   }
 
   /** Driver-seat world position and the chassis quaternion (for seating the astronaut). */
-  seatPose(pos: THREE.Vector3, quat: THREE.Quaternion) {
+  seatPose(pos: THREE.Vector3, quat: THREE.Quaternion, passenger = false) {
     this.root.updateMatrixWorld();
-    this.seat.getWorldPosition(pos);
+    (passenger ? this.seat2 : this.seat).getWorldPosition(pos);
     this.root.getWorldQuaternion(quat);
   }
 

@@ -158,9 +158,50 @@ Science sites were added only where a NASA Curiosity blog post confirms the acti
 
 **Curiosity's wheel tracks** are drawn along the MMGIS traverse with a 2.8 m track width. The decal includes the Morse-code "JPL" holes from the real wheels; age and erosion are not modelled.
 
+## v4 additions (2026-11-14)
+
+### CRISM hydrated-mineral layer (in use)
+- Product: **FRT000058A3_07_BRHYDJ_MTR3** (MTRDR browse "HYD", observed 2007-04-22), PDS Geosciences Node:
+  `https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/browse/2007/2007_112/frt000058a3/frt000058a3_07_brhydj_mtr3.png` (+ `.lbl`)
+- Chosen because its ODE footprint covers the entire AOI (the other 5 MTRDRs cover parts of it).
+- Bands (from the label): R = SINDEX2, G = BD2100_2, B = BD1900_2; physical value = DN × SCALING_FACTOR + OFFSET
+  (scale 9.5991e-5 / 7.6784e-5 / 1.8481e-4, offset 0.005 / 0 / 0). Parameters per Viviano-Beck et al. 2014, JGR Planets 119.
+- Label interpretation (quoted in the UI legend, paraphrased): polyhydrated sulfates may appear magenta, monohydrated sulfates
+  yellow/green, blue likely other hydrated minerals; spectra are needed for a positive identification.
+- Georeferencing: the label's EQUIRECTANGULAR projection (centre 0/0, R = 3396.19 km) is the same as the USGS DTM, so the AOI
+  crop is exact arithmetic (`line = LPO − lat·res`, `sample = lon·res + SPO`, res = 3293.04 px/deg ≈ 18 m), asserted against
+  the label's MAXIMUM_LATITUDE / WESTERNMOST_LONGITUDE in `scripts/fetch_crism.py`. Crop: 133 × 186 px.
+- Honest note: the signal in this AOI is weak (scene p95 band depths ~1%). The display is contrast-stretched to the scene's 99th
+  percentile and 3×3 smoothed; readouts show the raw band depths. The 8 strongest, ≥ 6 px-separated pixels become in-game
+  "hydrated-mineral target" specimens.
+
+### Validation against Curiosity's real drives
+- Drives: the MMGIS traverse features in mission order, cut between consecutive dated landmarks (`src/core/compare.ts`),
+  15 segments, 9.8 km of driving in the AOI.
+- **Hazard map agreement:** with a Curiosity-like profile (30° / 0.65 m, see ASSUMPTIONS), 20.5% of the AOI is no-go, but only
+  1.3% of Curiosity's real path lies on no-go cells: the rover team avoided our no-go terrain **~15× more than chance**.
+- **Line following:** A* averages 18 m from Curiosity's line vs 15 m for a straight line between the same stops. Most segments are
+  short hops over benign ground, and the long ones include science detours (sol 4151→4342: 1.2 km driven for a 185 m hop),
+  so we do **not** claim A* reproduces the rover's route; the claim is the hazard map.
+- Reproduce: `npx vitest run src/core/compare.test.ts` prints the per-segment table.
+
+### Earth–Mars light time
+- JPL "Approximate Positions of the Planets" (E. M. Standish), Keplerian elements Table 1 (1800–2050), Earth–Moon barycentre + Mars.
+- Checked in `src/core/space.test.ts`: 2003-08-27 close approach 55.80 Mkm (NASA: 55.76), 2020-10-06 62.06 Mkm (NASA: 62.07),
+  2026-01-09 solar conjunction 0.9° elongation. On 2026-11-14: 197 Mkm, 11.0 min one-way.
+
+### Dust optical depth
+- Clear-season Gale tau ~0.3–1 (MSL Mastcam solar tau, e.g. Lemmon et al. 2015, Icarus 251); 0.6 used.
+- 2018 global storm peak near tau ~8.5 at Gale (Guzewich et al. 2019, GRL 46) for scale; the game storm peaks ~3–5.
+- Dust-storm season Ls ~180–330 (e.g. Kass et al. 2016, GRL 43).
+
+### Web delivery
+- `scripts/optimize_web.py`: terrain chunks JPEG → WebP (7.7 → 4.1 MB) and the 2 m height grid as row deltas + gzip
+  (4.0 → 2.3 MB, lossless; asserted round-trip mod 2¹⁶). First load drops from ~15 MB to ~10 MB.
+
 ## Open verification items
 - [x] Boxwork entrance sols: the waypoint data shows the climb from −3645 m (sol 4591) to −3631 m (sols 4602–4605), consistent with the reported 11 m climb. Still worth a glance at the NASA blog for the exact narrative
-- [ ] CRISM MTRDR footprint overlap with the route corridor (Phase 2)
+- [x] CRISM MTRDR footprint overlap: FRT000058A3 covers the whole AOI (ODE footprint 137.324–137.563 E, −4.909…−4.686), 100% valid pixels in the crop
 - [ ] Location of the clay-to-sulfate transition. It is outside this AOI, so the default story was changed to "Gediz Vallis + boxwork"
 - [ ] DONKI FLR endpoint status at build time
 - [ ] DONKI snapshot: refill with a personal NASA API key (DEMO_KEY rate-limited on 2026-11-14)

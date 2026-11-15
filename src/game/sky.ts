@@ -14,6 +14,7 @@ void main() {
 const frag = /* glsl */ `
 uniform vec3 uSun;      // unit vector towards the sun
 uniform float uDay;     // 0 night .. 1 full day
+uniform float uDust;    // 0 clear .. 1 thick dust storm
 varying vec3 vDir;
 float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
 void main() {
@@ -43,6 +44,9 @@ void main() {
     float s = step(0.9975, hash(cell));
     col += vec3(s) * (0.35 - uDay) * 2.5 * h;
   }
+  // dust storm: a flat, dim brown pall; the sun becomes a faint smudge
+  vec3 pall = vec3(0.55, 0.38, 0.26) * mix(0.03, 1.0, uDay) * (1.0 - 0.55 * uDust);
+  col = mix(col, pall + vec3(0.4, 0.3, 0.2) * pow(cosA, 6.0) * 0.4 * uDay, uDust);
   // below horizon: dark ground haze
   if (d.y < 0.0) col = mix(col, horizon * 0.35 * mix(0.03, 1.0, uDay), min(-d.y * 8.0, 1.0));
   gl_FragColor = vec4(col, 1.0);
@@ -55,7 +59,7 @@ export class MarsSky {
   readonly sun = new THREE.DirectionalLight(0xfff1df, 3);
   readonly hemi = new THREE.HemisphereLight(0xd9a77c, 0x5a3420, 0.9);
   readonly fog = new THREE.FogExp2(0xc99a73, 1 / 30000);
-  private uni = { uSun: { value: new THREE.Vector3(0, 1, 0) }, uDay: { value: 1 } };
+  private uni = { uSun: { value: new THREE.Vector3(0, 1, 0) }, uDay: { value: 1 }, uDust: { value: 0 } };
   readonly sunDir = new THREE.Vector3(0, 1, 0);
   private envScene = new THREE.Scene();
   private envSky: THREE.Mesh;
@@ -89,6 +93,9 @@ export class MarsSky {
   }
 
   /** elevDeg/azDeg: sun position; az 0 = north (-Z), clockwise (east = +X). */
+  /** Atmospheric dust optical depth (tau). ~0.6 is a clear Gale day; regional storms reach several. */
+  tau = 0.6;
+
   setSun(elevDeg: number, azDeg: number) {
     const el = (elevDeg * Math.PI) / 180, az = (azDeg * Math.PI) / 180;
     this.sunDir.set(Math.cos(el) * Math.sin(az), Math.sin(el), -Math.cos(el) * Math.cos(az));
@@ -96,10 +103,18 @@ export class MarsSky {
     const day = THREE.MathUtils.smoothstep(elevDeg, -12, 8);
     this.uni.uDay.value = day;
     const lowSun = 1 - THREE.MathUtils.smoothstep(elevDeg, 0, 30);
-    this.sun.intensity = 3.2 * THREE.MathUtils.smoothstep(elevDeg, -1, 10) * (1 - 0.35 * lowSun);
+    // Beer-Lambert: direct sunlight falls as exp(-tau / sin(elev)); normalised to a clear (tau 0.6) noon
+    const mu = Math.max(Math.sin(el), 0.05);
+    const direct = Math.min(1.2, Math.exp(-this.tau / mu) / Math.exp(-0.6));
+    const dust = THREE.MathUtils.clamp((this.tau - 0.6) / 4, 0, 1);
+    this.uni.uDust.value = dust;
+    this.sun.intensity = 3.2 * THREE.MathUtils.smoothstep(elevDeg, -1, 10) * (1 - 0.35 * lowSun) * (this.tau > 0.65 ? direct : 1);
     this.sun.color.setRGB(1, 0.95 - 0.12 * lowSun, 0.88 - 0.2 * lowSun);
-    this.hemi.intensity = 0.15 + 1.0 * day;
-    this.fog.color.setRGB(0.79, 0.6, 0.45).multiplyScalar(0.06 + 0.94 * day);
+    this.hemi.intensity = (0.15 + 1.0 * day) * (1 - 0.45 * dust); // diffuse light holds up better than direct
+    this.fog.color.setRGB(0.79, 0.6, 0.45).multiplyScalar((0.06 + 0.94 * day) * (1 - 0.5 * dust));
+    // visibility: clear ~30 km fog scale, down to a few hundred metres in a thick storm
+    // exponential, so a moderate storm already hazes the horizon and a thick one closes in to ~170 m
+    this.fog.density = 1 / (30000 * Math.pow(150 / 30000, dust));
   }
 
   /** Keep the shadow camera centred on the player. */

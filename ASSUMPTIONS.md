@@ -85,6 +85,23 @@ Cell-level climb totals include some DTM noise (each 10 m step contributes its o
 | Throwable rocks | ballistic under 3.72 m/s², bounce 0.3 | sourced g / cosmetic | Throws fly ~2.6× farther than on Earth |
 | Field specimen types | by nearest science site | design | The descriptions follow the cited science; the individual stones are game items |
 
+## v4: validation, scenarios, comms, storms, EV2
+
+| Item | Value | Status | Notes |
+|---|---|---|---|
+| Curiosity validation profile | 30° slope, 0.65 m relief | slope **assumed**, relief sourced | 30° kept under MSL's 45° tilt rating; 65 cm = NASA's obstacle figure for the wheels |
+| Crew slope slider | 12–30° (default 25°) | **assumed** (user-set) | Walking profile copy with a different slope limit; the in-game A* and path home use it too |
+| Scenario ranking | EVA h + 10 (+5/h) if ending < 30 min before sunset, + 10 if suit > 90%, + steepest/30 | design | A ranking choice, shown in the panel |
+| Scenario suit use | walking at factor 1.0, seated driving and stops at 0.7 | **assumed** (from SUIT.metabolic) | Simplified versus the live per-second suit model |
+| Comms reply time | 2 × one-way light time + 2 min | light time sourced, +2 min **assumed** | No link within 3° of the Sun (solar conjunction) |
+| Dust storm chance | 0.35 per EVA sol in Ls 180–330, ×0.15 outside, ×3 compressed into the EVA | **assumed** for gameplay | Real regional storms reaching one site are far rarer |
+| Storm light | direct sun ∝ exp(−τ / sin elev) (Beer–Lambert); diffuse falls less | physics; split **assumed** | |
+| Storm visibility | fog scale 30 km × (150/30000)^dust, dust = (τ − 0.6)/4 | **assumed** shape | ≈170 m at τ 4.5 |
+| Storm temperature | diurnal swing shrinks toward the daily mean by 50% × dust | **assumed** shape | Dust warms nights and cools days (qualitatively observed) |
+| CRISM interpretation thresholds | scene-relative signal > 0.6 / 1 / 1.4 × p95 = weak / moderate / strong | **assumed** | The product label says spectra are needed for a positive ID; the UI says "-like" |
+| EV2 buddy | walks at the same Tobler pace (×1.2 when fetching), no own consumables | **assumed** | Fetch range 120 m (300 m with the spectrometer on) |
+
 ## Not yet modelled
 
-SEP/flare dose spikes, CRISM mineral layer, rover-assisted / heavy-load crew profiles, dust-storm opacity effects on lighting.
+SEP/flare dose spikes from real DONKI events, rover-assisted / heavy-load crew profiles beyond the slope slider,
+EV2's own suit and injuries, dust-storm effects on solar power.

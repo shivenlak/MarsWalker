@@ -7,7 +7,8 @@ import { R_MARS, type XY } from "../core/grid";
 
 export interface WorldMeta {
   width: number; depth: number; originX: number; originY: number; yRef: number;
-  height: { file: string; cols: number; rows: number; spacing: number; min: number; max: number };
+  height: { file: string; cols: number; rows: number; spacing: number; min: number; max: number; encoding?: string };
+  chunkExt?: string;
   chunkSize: number;
   chunks: { i: number; j: number; x0: number; z0: number; w: number; h: number }[];
   overview: { file: string; mpp: number };
@@ -42,11 +43,29 @@ export class Terrain {
 
   static async load(): Promise<Terrain> {
     const meta: WorldMeta = await (await fetch("world/world.json")).json();
-    const raw = new Uint16Array(await (await fetch(meta.height.file)).arrayBuffer());
+    const raw = await Terrain.loadHeights(meta);
     const { min, max } = meta.height;
     const h = new Float32Array(raw.length);
     for (let i = 0; i < raw.length; i++) h[i] = min + (raw[i] / 65535) * (max - min) - meta.yRef;
     return new Terrain(meta, h);
+  }
+
+  /** Uint16 heights. Shipped as row deltas + gzip (scripts/optimize_web.py), or raw Uint16 from build_world. */
+  private static async loadHeights(meta: WorldMeta): Promise<Uint16Array> {
+    const res = await fetch(meta.height.file);
+    if (meta.height.encoding !== "row-delta-int16-gzip") return new Uint16Array(await res.arrayBuffer());
+    let buf = await res.arrayBuffer();
+    const b = new Uint8Array(buf, 0, 2);
+    // some servers already undo the gzip (Content-Encoding); only inflate if the gzip magic bytes are there
+    if (b[0] === 0x1f && b[1] === 0x8b) buf = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+    const d = new Int16Array(buf);
+    const { cols, rows } = meta.height;
+    const out = new Uint16Array(cols * rows);
+    for (let r = 0; r < rows; r++) {
+      let acc = 0;
+      for (let c = 0; c < cols; c++) { acc += d[r * cols + c]; out[r * cols + c] = acc; }
+    }
+    return out;
   }
 
   // ---------- coordinates ----------
@@ -99,8 +118,8 @@ export class Terrain {
     let done = 0;
     const jobs = chunks.map(async (c) => {
       const [map, nrm] = await Promise.all([
-        loader.loadAsync(`world/chunks/c${c.i}_${c.j}.jpg`),
-        loader.loadAsync(`world/chunks/n${c.i}_${c.j}.jpg`),
+        loader.loadAsync(`world/chunks/c${c.i}_${c.j}.${this.meta.chunkExt ?? "jpg"}`),
+        loader.loadAsync(`world/chunks/n${c.i}_${c.j}.${this.meta.chunkExt ?? "jpg"}`),
       ]);
       map.colorSpace = THREE.SRGBColorSpace;
       map.anisotropy = aniso;

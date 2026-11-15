@@ -11,7 +11,9 @@ export interface Settings {
   startHour: number;
 }
 
-const DEFAULTS: Settings = { travel: "foot", hazards: "realistic", graphics: "high", sound: true, startHour: 9 };
+// phones/tablets start on medium graphics (coarse pointer = touch screen)
+const touch = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+const DEFAULTS: Settings = { travel: "foot", hazards: "realistic", graphics: touch ? "medium" : "high", sound: true, startHour: 9 };
 
 export function loadSettings(): Settings {
   try {

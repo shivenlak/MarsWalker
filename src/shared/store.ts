@@ -2,6 +2,7 @@
 
 import type { Grid } from "../core/grid";
 import type { Route, RoutePoint } from "../core/route";
+import type { Crism } from "./crism";
 import type { StopInfo } from "./data";
 
 export interface SimState {
@@ -15,6 +16,9 @@ export const store = {
   grid: null as Grid | null,
   stops: [] as StopInfo[],
   route: null as Route | null,
+  /** crew walking slope limit (deg), set by the planner's capability slider; the game's live A* uses it too */
+  crewSlopeDeg: 25,
+  crism: null as Crism | null,
   sim: { running: false, evaS: 0, pos: null, headingDeg: 0 } as SimState,
 };
 

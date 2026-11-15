@@ -11,6 +11,7 @@ export class Screens {
   onQuick: (() => void) | null = null;
   onFree: (() => void) | null = null;
   onOptions: (() => void) | null = null;
+  onDemo: (() => void) | null = null;
 
   constructor(root: HTMLElement) {
     this.el = document.createElement("div");
@@ -32,6 +33,7 @@ export class Screens {
           <button class="btn big" data-act="plan">MISSION</button>
           <button class="btn big" data-act="free">FREE EXPLORE</button>
           <div class="t-row"><button class="btn" data-act="quick">QUICK MISSION</button><button class="btn" data-act="options">OPTIONS</button></div>
+          <button class="btn ghost" data-act="demo">&#9654; WATCH THE 3-MINUTE DEMO</button>
         </div>
         <div class="t-foot">Every metre of ground is real: USGS 1 m HiRISE terrain · HiRISE colour · HRSC-MOLA Mount Sharp ·
           Curiosity traverse, Navcam images and REMS weather. NASA Space Apps 2026.</div>
@@ -55,6 +57,7 @@ export class Screens {
     this.el.querySelector<HTMLButtonElement>("[data-act=quick]")!.onclick = () => this.onQuick?.();
     this.el.querySelector<HTMLButtonElement>("[data-act=free]")!.onclick = () => this.onFree?.();
     this.el.querySelector<HTMLButtonElement>("[data-act=options]")!.onclick = () => this.onOptions?.();
+    this.el.querySelector<HTMLButtonElement>("[data-act=demo]")!.onclick = () => this.onDemo?.();
     const lb = this.q<HTMLElement>(".lightbox");
     lb.onclick = () => lb.classList.remove("on");
   }

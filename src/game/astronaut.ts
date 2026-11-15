@@ -80,7 +80,8 @@ export class Astronaut {
   /** ground height sampler (world) for foot IK */
   ground: ((x: number, z: number) => number) | null = null;
 
-  constructor() {
+  /** stripes: EV1 (commander) wears red stripes, EV2 a plain suit, as on NASA EVAs */
+  constructor(stripes = true) {
     this.root.add(this.pelvis);
     this.pelvis.position.y = 1.0;
 
@@ -97,7 +98,7 @@ export class Astronaut {
       hip.add(hb);
       hip.add(segment(THIGH, 0.1, 0.085, 2));
       const stripe = mesh(new THREE.CylinderGeometry(0.097, 0.095, 0.05, 20), red, 0, -0.18, 0);
-      if (side < 0) hip.add(stripe);
+      if (side < 0 && stripes) hip.add(stripe);
       const knee = new THREE.Group();
       knee.position.y = -THIGH;
       knee.add(mesh(new THREE.SphereGeometry(0.088, 16, 12), fabricShade));
@@ -177,7 +178,7 @@ export class Astronaut {
       const sb = mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.06, 20), metal);
       sb.rotation.z = Math.PI / 2; shoulder.add(sb);
       shoulder.add(segment(0.3, 0.075, 0.068, 2));
-      if (side > 0) shoulder.add(mesh(new THREE.CylinderGeometry(0.074, 0.073, 0.045, 20), red, 0, -0.12, 0));
+      if (side > 0 && stripes) shoulder.add(mesh(new THREE.CylinderGeometry(0.074, 0.073, 0.045, 20), red, 0, -0.12, 0));
       const elbow = new THREE.Group();
       elbow.position.y = -0.3;
       for (let i = 0; i < 3; i++) elbow.add(ring(0.066, 0.012, fabricShade, 0.02 - i * 0.025));

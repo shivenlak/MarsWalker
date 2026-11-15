@@ -9,10 +9,11 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { EVA, RADIATION, ROVER, SUIT, SURVIVAL, WALKING, type TerrainProfile } from "../core/config";
+import { DUST, EVA, RADIATION, ROVER, SUIT, SURVIVAL, WALKING, withSlopeLimit, type TerrainProfile } from "../core/config";
 import { blockReason } from "../core/cost";
 import { type Grid, lonLatToXY, xyToIdx, xyToLonLat } from "../core/grid";
 import { nearestReachable, routeThrough, type Route, type Stop } from "../core/route";
+import { commLink, CONJUNCTION_DEG } from "../core/space";
 import { dateAtLTST, fmtClock, MARS_HOUR_S, marsTime, sunPosition } from "../core/sun";
 import { metabolicFactor, newSuit, returnCheck, tickSuit, type ReturnCheck, type SuitState } from "../core/suit";
 import { canCarry, damage, heaterLoad, impactDamage, newVitals, SAMPLE_LIMIT_KG, tickVitals, type Sample, type Vitals } from "../core/survival";
@@ -23,12 +24,17 @@ import { fmtDist, fmtDur } from "../shared/format";
 import { store } from "../shared/store";
 import { Astronaut, visorMat } from "./astronaut";
 import { SuitAudio } from "./audio";
+import { Buddy } from "./buddy";
+import { Director, type DemoStep } from "./demo";
 import { Buggy } from "./buggy";
 import { AmbientDust, DustPuffs, Footprints, Rocks, wheelTrackTexture } from "./effects";
 import { Helmet } from "./helmet";
 import { Hud, type Objective } from "./hud";
 import { makeBeacon, RouteRibbon, ScanMarker, type Beacon, type P2 } from "./markers";
 import { Menus, type JournalEntry, type Settings } from "./menus";
+import { PhotoMode } from "./photo";
+import { TouchControls } from "./touch";
+import { XRMode } from "./xr";
 import { Player } from "./player";
 import { DustDevils, Habitat, LooseRocks, makeCuriosity, makeTracks, Shelter, Specimens } from "./props";
 import { Screens } from "./screens";
@@ -44,7 +50,7 @@ const SURVEY_TASKS = [
   { label: "Image the outcrop (Mastcam-style panorama)", min: EVA.stopDwellMin.value / 3 },
   { label: "Drill & bag the site sample", min: (EVA.stopDwellMin.value * 2) / 3 },
 ];
-const OVERLAYS = ["off", "slope", "go/no-go (A*)", "elevation", "thermal (THEMIS)"] as const;
+const OVERLAYS = ["off", "slope", "go/no-go (A*)", "elevation", "thermal (THEMIS)", "minerals (CRISM)"] as const;
 
 export interface World { traverse: P2[][]; landmarks: Landmark[] }
 
@@ -59,10 +65,17 @@ export class Game {
   private astro = new Astronaut();
   private player: Player;
   private buggy: Buggy;
+  private buddy: Buddy;
   private hab: Habitat;
   private shelter = new Shelter();
   private hud: Hud;
   private helmet: Helmet;
+  private photo: PhotoMode;
+  private director: Director;
+  private touch: TouchControls;
+  private xr: XRMode;
+  private demoSaved: Settings | null = null;
+  private captureNext = false;
   private screens: Screens;
   private menus: Menus;
   private map: MissionMap;
@@ -92,6 +105,8 @@ export class Game {
   private camMode: "third" | "first" = "third";
   private lastDrag = -10;
   private warpIdx = 2;
+  private driveAlong = 0;
+  private driveVer = -1;
   private time = 0;
   private titleT = 0;
   private settings: Settings;
@@ -133,6 +148,10 @@ export class Game {
   private sunElev = 30;
   private ltst = 9;
   private paused = false;
+  // comms with Earth: every report waits for the real one-way light time, replies take the round trip
+  private storm: { phase: "none" | "warning" | "active" | "over"; t: number; peak: number; dur: number } = { phase: "none", t: 0, peak: 0, dur: 0 };
+  private tau = DUST.clearTau.value;
+  private comms: { reply: string; sentS: number; arriveS: number; delivered: boolean }[] = [];
 
   constructor(private root: HTMLElement, private terrain: Terrain, private grid: Grid, private rems: Rems, private donki: Donki | null, private world: World) {
     const r = new THREE.WebGLRenderer({ antialias: false, logarithmicDepthBuffer: true, powerPreference: "high-performance" });
@@ -163,6 +182,19 @@ export class Game {
     this.astro.ground = (x, z) => terrain.heightAt(x, z);
     this.buggy = new Buggy(terrain);
     this.scene.add(this.buggy.root);
+    this.buddy = new Buddy(terrain, grid);
+    this.scene.add(this.buddy.astro.root);
+    this.buddy.astro.onStep = (f) => { if (this.state === "play") { this.footprints.add(f.x, f.z, this.buddy.heading); this.puffs.burst(f, 4, 0.6); } };
+    this.buddy.onSay = (m) => this.hud.toast(m, 3500);
+    this.buddy.onTake = (sp) => { this.specimens.take(sp); this.updateObjectives(); };
+    this.buddy.onHandover = (sp) => {
+      const site = sp.site === "plain" || sp.site === "crism" ? (sp.site === "crism" ? "CRISM target" : "open plains") : store.stops.find((q) => q.id === sp.site)?.name.split(" - ")[0] ?? sp.site;
+      const smp: Sample = { id: sp.id, name: sp.name, site, massKg: sp.massKg, about: sp.about };
+      if (!canCarry(this.bag, smp)) { this.hud.toast("EV2: your bag is full, I'll hang on to this one until we're at the habitat"); return false; }
+      this.bag.push(smp); this.updateObjectives();
+      this.hud.toast(`<b>EV2 HANDOVER</b> · ${smp.name} (${smp.massKg} kg) into your bag`, 3500); this.audio.beep(1050);
+      return true;
+    };
     this.footprints = new Footprints(terrain);
     this.wheelTracks = new Footprints(terrain, 0.26, 0.6, wheelTrackTexture());
     this.puffs = new DustPuffs(terrain);
@@ -212,13 +244,32 @@ export class Game {
     const sciW = store.stops.filter((s) => s.kind === "science").map((s) => ({ id: s.id, ...terrain.toWorld(lonLatToXY(s)) }));
     this.loose = new LooseRocks(terrain, [{ x: bw.x + 6, z: bw.z - 6 }, ...sciW.slice(0, 3)]);
     this.loose.onImpact = (p, v) => { this.puffs.burst(p, Math.min(30, Math.round(v * 5)), Math.min(2, v / 3)); this.audio.step(); };
-    this.specimens = new Specimens(terrain, grid, sciW);
+    const hot = (store.crism?.hotspots(8) ?? []).map((h) => ({
+      ...terrain.toWorld(lonLatToXY(h)),
+      about: `CRISM (orbit) flagged this spot: ${h.r.label}, band depths SINDEX2 ${h.r.sindex2.toFixed(4)}, BD2100 ${h.r.bd2100.toFixed(4)}, BD1900 ${h.r.bd1900.toFixed(4)}. Bring it back so the lab can confirm.`,
+    }));
+    this.specimens = new Specimens(terrain, grid, sciW, hot);
     this.scene.add(this.loose.group, this.specimens.group);
 
     this.hud = new Hud(root, terrain.meta.overview.file, terrain.meta.width, terrain.meta.depth);
     this.hud.visible = false;
     this.hud.onExpand = () => this.openMap();
     this.helmet = new Helmet(root);
+    this.photo = new PhotoMode(root);
+    this.photo.onCapture = () => { this.captureNext = true; };
+    this.photo.onExit = () => this.togglePhoto(false);
+    this.touch = new TouchControls(root, (k) => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: k }));
+      setTimeout(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: k })), 60);
+    });
+    this.xr = new XRMode(r, this.camera, this.scene, root);
+    this.xr.onTrigger = () => {
+      if (this.state !== "play") return;
+      this.player.autopilot = !this.player.autopilot;
+      if (this.player.autopilot && !this.navRoute) this.replanNav("route");
+    };
+    this.director = new Director(root);
+    this.director.onEnd = () => this.endDemo();
     this.scanEl = document.createElement("div");
     this.scanEl.className = "g-scan";
     root.appendChild(this.scanEl);
@@ -272,10 +323,17 @@ export class Game {
     this.map.onBegin = () => this.deploy("mission");
     this.map.onClose = () => this.closeMap();
     this.map.onNavigate = (p, label) => this.navigateTo(p, label);
+    this.map.onCapability = () => { if (this.state === "play") { this.navCheckT = 0; this.replanNav(`re-planned for a ${store.crewSlopeDeg}° crew limit`); } };
+    this.map.onTravel = (t, h) => {
+      this.settings.travel = t === "buggy" ? "buggy" : "foot";
+      this.settings.startHour = h;
+      this.hud.toast(`Scenario applied: ${t === "buggy" ? "buggy" : "on foot"}, start ${String(h).padStart(2, "0")}:00`, 2500);
+    };
     this.screens.onPlan = () => { this.audio.start(); this.state = "briefing"; this.screens.hideAll(); this.map.show("briefing", this.briefingInfo()); };
     this.screens.onQuick = () => { this.audio.start(); this.deploy("mission"); };
     this.screens.onFree = () => { this.audio.start(); this.deploy("explore"); };
     this.screens.onOptions = () => this.menus.options();
+    this.screens.onDemo = () => this.startDemo();
     this.buildOverlays();
     const n = (s: StopInfo) => (s.kind === "base" ? "&#8962;" : s.kind === "rover" ? "C" : String(store.stops.indexOf(s)));
     for (const s of store.stops) {
@@ -289,6 +347,7 @@ export class Game {
     this.resetEva();
     this.toTitle();
     this.renderer.setAnimationLoop(() => this.frame());
+    if (new URLSearchParams(location.search).has("demo")) setTimeout(() => this.startDemo(), 1500);
   }
 
   // ---------- settings ----------
@@ -314,6 +373,14 @@ export class Game {
     const load = (f: string) => { const t = new THREE.TextureLoader().load(f); t.colorSpace = THREE.SRGBColorSpace; return t; };
     this.overlayTex["slope"] = { tex: load("overlays/slope.png"), rect: { x0: 0, z0: 0, w: W, h: D } };
     this.overlayTex["elevation"] = { tex: load("overlays/hillshade.png"), rect: { x0: 0, z0: 0, w: W, h: D } };
+    const cr = store.crism;
+    if (cr) {
+      const nw = this.terrain.toWorld(lonLatToXY({ lon: cr.meta.bounds.west, lat: cr.meta.bounds.north }));
+      const se = this.terrain.toWorld(lonLatToXY({ lon: cr.meta.bounds.east, lat: cr.meta.bounds.south }));
+      const t = new THREE.CanvasTexture(cr.stretched());
+      t.colorSpace = THREE.SRGBColorSpace; t.flipY = true;
+      this.overlayTex["minerals (CRISM)"] = { tex: t, rect: { x0: nw.x, z0: nw.z, w: se.x - nw.x, h: se.z - nw.z } };
+    }
     fetch("overlays/themis.json").then((r) => r.json()).then((t) => {
       const nw = this.terrain.toWorld(lonLatToXY({ lon: t.bounds.west, lat: t.bounds.north }));
       const se = this.terrain.toWorld(lonLatToXY({ lon: t.bounds.east, lat: t.bounds.south }));
@@ -364,10 +431,11 @@ export class Game {
       weather: `REMS analogue sol ${a.sol} (${a.date}, Ls ${a.ls}°, same season last Mars year): air ${a.minAirC}..${a.maxAirC} °C, ground ${a.minGroundC}..${a.maxGroundC} °C, ${a.pressurePa} Pa, ${a.opacity}, UV ${a.uv}.`,
       weatherSource: this.rems.source,
       spaceWx: spaceWeather(this.donki),
+      comm: commLink(new Date()),
     };
   }
 
-  private get profile(): TerrainProfile { return this.driving ? ROVER : WALKING; }
+  private get profile(): TerrainProfile { return this.driving ? ROVER : withSlopeLimit(WALKING, store.crewSlopeDeg); }
   private baseStop() { return store.stops.find((s) => s.kind === "base")!; }
 
   private resetEva() {
@@ -379,6 +447,7 @@ export class Game {
     Object.assign(this.player, { odometer: 0, climbed: 0, autopilot: false, airborne: false, vy: 0, kneel: 0 });
     this.buggy.place(w.x + Math.cos(head) * 7, w.z + Math.sin(head) * 7, head);
     this.buggy.battery = 1; this.buggy.odometer = 0;
+    this.buddy.place(w.x - Math.sin(head) * 3.5 - Math.cos(head) * 2, w.z + Math.cos(head) * 3.5 - Math.sin(head) * 2, head);
     this.driving = false;
     this.astro.setVisible(true);
     this.camYaw = head;
@@ -393,6 +462,8 @@ export class Game {
     this.scan.hide(); this.scanEl.classList.remove("on");
     this.shelter.deployed = false; this.shelter.group.visible = false;
     this.sep = { phase: "none", t: 0, doseMSv: 0 };
+    this.comms = [];
+    this.storm = { phase: "none", t: 0, peak: 0, dur: 0 }; this.tau = DUST.clearTau.value;
     this.visorDust = 0; this.frost = 0; this.sunsetWarned = false; this.held = null;
     this.updateObjectives();
   }
@@ -571,7 +642,9 @@ export class Game {
     const pts = r.points.map((p) => this.terrain.toWorld(p));
     pts.unshift({ x: this.player.x, z: this.player.z });
     pts.push({ x: endX, z: endZ });
-    this.navRibbon.set(pts);
+    // the 10 m A* grid doesn't know about the habitat: bend the route around its hull (1 m clearance)
+    const clear = (q: P2) => { const c = { ...q }; this.hab.collide(c, 1.0); return c; };
+    this.navRibbon.set(pts.map((q, i) => (i === pts.length - 1 && t.id === "base" ? q : clear(q))));
     if (reason) this.hud.toast(`A* ${reason}: ${fmtDist(r.totals.distM)} to ${label} <small>(${r.computeMs.toFixed(0)} ms, ${this.driving ? "buggy" : "walking"})</small>`, 2500);
   }
 
@@ -584,7 +657,7 @@ export class Game {
   }
 
   private updateHome() {
-    const r = routeThrough(this.grid, [this.here(), this.baseStop()], WALKING);
+    const r = routeThrough(this.grid, [this.here(), this.baseStop()], withSlopeLimit(WALKING, store.crewSlopeDeg));
     this.ret = r.legs.length ? returnCheck(this.suit, r.totals.walkS, r.totals.distM, r.totals.climbM) : null;
     this.homePts = r.points.map((p) => this.terrain.toWorld(p));
     const show = this.showHome || (this.ret && this.ret.status !== "ok");
@@ -610,6 +683,7 @@ export class Game {
       }
       if (sv.tasks.every((k) => k.done) && !this.surveyed.has(sv.stop.id)) {
         this.surveyed.add(sv.stop.id); this.discovered.add(sv.stop.id);
+        this.report(`Survey report from ${sv.stop.name.split(" - ")[0]}`, `Science team: great data from ${sv.stop.name.split(" - ")[0]}. Your images match what Curiosity saw there. Proceed with the plan.`);
         this.updateObjectives();
         this.navTarget = null;
         this.replanNav("next objective");
@@ -693,10 +767,13 @@ export class Game {
           if (Math.hypot(this.buggy.x - this.hab.center.x, this.buggy.z - this.hab.center.z) < 30) this.buggy.battery = 1;
           this.habMenu();
         } },
-        { label: `Deliver ${this.bag.length} sample(s) to the lab`, note: "5 min", disabled: !this.bag.length, run: () => {
+        { label: `Deliver ${this.bag.length + (this.buddy.carrying ? 1 : 0)} sample(s) to the lab`, note: "5 min", disabled: !this.bag.length && !this.buddy.carrying, run: () => {
           this.deposited.push(...this.bag); this.bag = [];
+          const bc = this.buddy.carrying;
+          if (bc) { this.deposited.push({ id: bc.id, name: bc.name, site: bc.site, massKg: bc.massKg, about: bc.about }); this.buddy.carrying = null; }
           this.advanceClock(5 * 60, true);
           this.hud.toast(`<b>SAMPLES DELIVERED</b> · science score ${this.score()}`);
+          this.report("Sample manifest", "Curation team: manifest received. Keep the cores sealed and cold for the return vehicle.");
           this.updateObjectives();
           this.habMenu();
         } },
@@ -789,6 +866,7 @@ export class Game {
         <div><span>${gi >= 0 ? this.grid.rough[gi].toFixed(2) : "-"} m</span>roughness</div>
         <div><span>${fmtDist(dist)} · ${brg.toFixed(0)}°</span>range · bearing</div>
       </div>
+      ${this.crismLine(x, z)}
       <p class="${why ? "warn" : "ok-text"}">${why ? `NO-GO (${this.driving ? "buggy" : "walking"}): ${why}` : `Go for ${this.driving ? "the buggy" : "walking"}`}</p>
       <button class="btn small go" ${why ? "disabled" : ""}>Navigate here (A*) <kbd>N</kbd></button>`;
     this.scanEl.classList.add("on");
@@ -798,22 +876,175 @@ export class Game {
     (this.scanEl as HTMLDivElement & { go?: () => void }).go = why ? undefined : go;
   }
 
+  /** R: send EV2 to fetch the nearest specimen (it plans its own A* route there and back). */
+  private sendBuddy() {
+    if (this.driving) { this.hud.toast("EV2 is riding with you · get out first"); return; }
+    if (this.buddy.mode !== "follow") { this.hud.toast(this.buddy.status || "EV2 is busy"); return; }
+    const free = this.specimens.list.filter((s) => !s.taken && Math.hypot(s.x - this.player.x, s.z - this.player.z) < (this.scanner ? 300 : 120));
+    free.sort((a, b) => Math.hypot(a.x - this.player.x, a.z - this.player.z) - Math.hypot(b.x - this.player.x, b.z - this.player.z));
+    const t = free.find((s) => this.buddy.send(s));
+    this.hud.toast(t ? `<b>EV2</b> · on my way to the ${t.name}, ${fmtDist(Math.hypot(t.x - this.player.x, t.z - this.player.z))} out (A* route)` : `EV2: no specimen in range${this.scanner ? "" : " · switch on the spectrometer (Q) to search wider"}`, 3500);
+  }
+
+  private togglePhoto(on: boolean, hour?: number) {
+    if (on) {
+      this.photo.open({ x: this.player.x, z: this.player.z, yaw: this.camYaw, hour: hour ?? Math.round(this.ltst * 4) / 4 });
+      this.hud.visible = false;
+      this.astro.setFirstPerson(false);
+    } else {
+      this.photo.close();
+      this.hud.visible = this.state === "play";
+      this.astro.setFirstPerson(this.camMode === "first");
+    }
+  }
+
+  /** Send a report to Earth; the reply arrives after the real round-trip light time (sim clock). */
+  private report(what: string, reply: string) {
+    const link = commLink(new Date(this.startDate.getTime() + this.evaS * 1000));
+    if (link.sunAngleDeg < CONJUNCTION_DEG.value) { this.hud.toast(`<b>NO LINK</b> · Mars is ${link.sunAngleDeg.toFixed(1)}° from the Sun (solar conjunction). The crew is on its own.`, 4000); return; }
+    const rt = 2 * link.oneWayS + 120; // + ~2 min for the team to answer
+    this.comms.push({ reply, sentS: this.evaS, arriveS: this.evaS + rt, delivered: false });
+    this.hud.toast(`<b>UPLINK</b> · ${what} sent to Earth · arrives in ${fmtDur(link.oneWayS)}, reply in ~${fmtDur(rt)} <small>(${(link.distKm / 1e6).toFixed(0)} million km)</small>`, 4000);
+  }
+  private tickComms() {
+    for (const c of this.comms) if (!c.delivered && this.evaS >= c.arriveS) {
+      c.delivered = true;
+      this.hud.toast(`<b>EARTH</b> <small>(sent ${fmtDur(this.evaS - c.sentS)} ago)</small> · ${c.reply}`, 7000);
+      this.audio.beep(700); setTimeout(() => this.audio.beep(900), 120);
+    }
+  }
+
+  // ---------- guided demo ----------
+  private worldOf(id: string) { const st = store.stops.find((q) => q.id === id)!; return { st, ...this.terrain.toWorld(lonLatToXY(st)) }; }
+  /** Put the walker (and EV2) at a spot, facing a point. */
+  private teleport(x: number, z: number, faceX: number, faceZ: number) {
+    const h = Math.atan2(faceX - x, -(faceZ - z));
+    if (this.driving) this.exitBuggy();
+    this.player.place(x, z, h);
+    this.player.autopilot = false;
+    this.buddy.place(x - Math.sin(h) * 3.5 - Math.cos(h) * 2, z + Math.cos(h) * 3.5 - Math.sin(h) * 2, h);
+    this.camYaw = h; this.navCheckT = 0; this.trail.push({ x, z });
+  }
+  /** Jump the EVA clock forward to a local solar hour (demo only). */
+  private setHour(hour: number) {
+    const now = new Date(this.startDate.getTime() + this.evaS * 1000);
+    let t = dateAtLTST(now, hour);
+    if (t.getTime() < now.getTime()) t = dateAtLTST(new Date(now.getTime() + MARS_HOUR_S * 1000 * 12), hour);
+    this.evaS += (t.getTime() - now.getTime()) / 1000;
+    this.sunsetWarned = true;
+  }
+
+  private startDemo() {
+    if (this.director.active) return;
+    this.demoSaved = { ...this.settings };
+    this.settings = { ...this.settings, travel: "foot", hazards: "off", startHour: 9 };
+    this.audio.start();
+    const gz = this.worldOf("gediz"), cu = this.worldOf("curiosity");
+    const steps: DemoStep[] = [
+      { dur: 6, cap: "MARSWALK", sub: "A walkable EVA planner on real NASA terrain · Gale crater, lower Mount Sharp", run: () => this.toTitle() },
+      { dur: 7, cap: "Plan the EVA with A*", sub: "Slope + roughness on 80,000 cells from the USGS 1 m HiRISE terrain model · today's sol, REMS weather, Earth light-time",
+        run: () => { this.screens.hideAll(); this.state = "briefing"; this.map.setProfile(WALKING); this.map.show("briefing", this.briefingInfo()); } },
+      { dur: 6, cap: "Walk or drive: A* re-plans for each vehicle", sub: "The buggy can't climb onto the boxwork ridge, so A* parks it and you walk the last stretch",
+        run: () => this.map.setProfile(ROVER) },
+      { dur: 8, cap: "Validated against Curiosity", sub: "On 9.8 km of Curiosity's real drives, the rover stayed off our no-go terrain 15&times; more than chance",
+        run: () => { this.map.setProfile(WALKING); this.map.validate(); } },
+      { dur: 6, cap: "What-if scenarios in milliseconds", sub: "Every stop order &times; on foot / buggy &times; start time, ranked by time, daylight and suit margin",
+        run: () => this.map.scenarios() },
+      { dur: 6.5, cap: "Touchdown on lower Mount Sharp", sub: "HiRISE colour on the 1 m DTM · Mount Sharp and the crater rim from HRSC-MOLA, with planet curvature",
+        run: () => this.deploy("mission") },
+      { dur: 7, cap: "Every footstep on the real slope", sub: "Mars gravity 3.72 m/s² · walking pace from a Tobler-style model on the local grade",
+        run: () => { this.warpIdx = 0; this.replanNav(""); this.player.autopilot = true; } },
+      { dur: 6, cap: "Go / no-go map draped on the ground", sub: "Red = steeper than 25° or rougher than 0.5 m: the cells A* will never cross",
+        run: () => this.setOverlay(OVERLAYS.indexOf("go/no-go (A*)")), tick: (t) => { if (t > 5.8) this.setOverlay(0); } },
+      { dur: 8, cap: "Autopilot rides the A* route, even at &times;30 time warp", sub: "Suit consumables, dose and return margin tick in simulated time",
+        run: () => { this.warpIdx = 4; this.player.autopilot = true; } },
+      { dur: 8, cap: "Survey a real Curiosity site: Gediz Vallis", sub: "These are Curiosity's own Navcam images from this exact spot (NASA/JPL-Caltech)",
+        run: () => { this.warpIdx = 2; this.teleport(gz.x - 9, gz.z + 7, gz.x, gz.z); this.interact(); },
+        tick: (t) => { if (t > 2 && this.survey && !this.survey.tasks.some((k) => k.running || k.done)) this.survey.tasks[1].running = true; if (t > 7.8) this.leaveSurvey(); } },
+      { dur: 7, cap: "Orbital mineral map: MRO CRISM", sub: "Hydrated-sulfate signatures (CRISM FRT000058A3) · the spectrometer's specimen targets come from it",
+        run: () => { this.setOverlay(OVERLAYS.indexOf("minerals (CRISM)")); this.scanner = true; this.camDist = 30; this.camPitch = 0.7; },
+        tick: (t) => { if (t > 6.8) { this.setOverlay(0); this.camDist = 5.5; this.camPitch = 0.16; } } },
+      { dur: 8, cap: "EV2: no one walks alone", sub: "Your buddy plans its own A* route to a specimen, collects it and brings it back",
+        run: () => { this.warpIdx = 3; this.sendBuddy(); this.camDist = 12; } },
+      { dur: 6, cap: "Inside the helmet", sub: "Gold visor, frost, dust and breath fog; the HUD projected on the visor",
+        run: () => { this.camDist = 5.5; this.camMode = "first"; this.hud.setMode("first"); this.astro.setFirstPerson(true); this.camPitch = 0.35; },
+        tick: (t) => { this.camYaw += 0.15 * (t < 3 ? 1 : -1) * 0.016; if (t > 5.8) { this.camMode = "third"; this.hud.setMode("third"); this.astro.setFirstPerson(false); this.camPitch = 0.16; } } },
+      { dur: 9, cap: "Take the buggy", sub: "Apollo-LRV-class physics: slip, jumps, rollover · the A* autopilot slows for bends",
+        run: () => {
+          const h = this.player.heading;
+          this.buggy.place(this.player.x + Math.cos(h) * 3, this.player.z + Math.sin(h) * 3, h);
+          this.enterBuggy(true);
+          this.navTarget = { kind: "stop", id: "curiosity" }; this.replanNav("");
+          this.player.autopilot = true; this.warpIdx = 4;
+        } },
+      { dur: 8, cap: "Meet Curiosity at its real position (sol 5073)", sub: "Reports to Earth wait for the real light-time: about 11 minutes each way today",
+        run: () => {
+          // stand on the lowest ground ~10 m from the rover so nothing blocks the view of it
+          const rx = cu.x + 3, rz = cu.z;
+          let best = { x: rx - 7, z: rz + 7, h: Infinity };
+          for (let a = 0; a < 16; a++) {
+            const x = rx + Math.cos((a / 16) * Math.PI * 2) * 10, z = rz + Math.sin((a / 16) * Math.PI * 2) * 10;
+            const h = this.terrain.heightAt(x, z);
+            if (this.terrain.inside(x, z, 8) && h < best.h) best = { x, z, h };
+          }
+          this.teleport(best.x, best.z, rx, rz); this.warpIdx = 5; this.camDist = 9; this.report("Photo of Curiosity", "JPL rover team: we see you in Curiosity's hazcams! First human visitor. Please don't touch the wheels."); } },
+      { dur: 9, cap: "A regional dust storm rolls in", sub: "Beer–Lambert sunlight, visibility down to a few hundred metres: trust the A* route home",
+        run: () => { this.warpIdx = 4; this.storm = { phase: "active", t: 2400, peak: DUST.stormPeakTau.value, dur: 3 * 3600 }; this.camDist = 7; } },
+      { dur: 8, cap: "Night falls", sub: "",
+        run: () => {
+          this.storm = { phase: "over", t: 0, peak: 0, dur: 0 }; this.tau = DUST.clearTau.value; this.warpIdx = 2; this.setHour(21);
+          const cap = this.director.el.querySelector(".dm-s");
+          if (cap) cap.innerHTML = `${airTempAt(this.analogue, 21).toFixed(0)} °C now, ${this.analogue.minAirC ?? "?"} °C by dawn (Curiosity's REMS, same season) · the suit heater drains consumables; helmet lamps on`;
+        } },
+      { dur: 7, cap: "Photo mode", sub: "Free camera and any time of day, for your own Mars postcards",
+        run: () => { this.setHour(16.6); this.togglePhoto(true, 16.6); this.photo.state.dist = 14; this.photo.state.pitch = 0.18; },
+        tick: (_t, dt) => { this.photo.state.yaw += dt * 0.25; } },
+      { dur: 6, cap: "MARSWALK · NASA Space Apps 2026", sub: "Real data · A* planning validated against Curiosity · press any key to play",
+        run: () => { this.togglePhoto(false); this.toTitle(); } },
+    ];
+    this.director.start(steps);
+  }
+
+  private endDemo() {
+    if (this.photo.state.on) this.togglePhoto(false);
+    if (this.demoSaved) { this.settings = this.demoSaved; this.demoSaved = null; }
+    this.storm = { phase: "none", t: 0, peak: 0, dur: 0 }; this.tau = DUST.clearTau.value;
+    this.scanner = false; this.setOverlay(0); this.warpIdx = 2; this.camDist = 5.5; this.camPitch = 0.16;
+    if (this.camMode === "first") { this.camMode = "third"; this.hud.setMode("third"); this.astro.setFirstPerson(false); }
+    this.toTitle();
+  }
+
+  /** CRISM orbital reading at a world point, for scan readouts. */
+  private crismLine(x: number, z: number) {
+    const r = store.crism?.at(this.terrain.lonLat(x, z).lon, this.terrain.lonLat(x, z).lat);
+    if (!r) return "";
+    return `<p class="src"><b>CRISM from orbit (18 m):</b> ${r.label} · ${r.strength} <span class="tag sourced" title="${store.crism!.meta.source}">CRISM</span></p>`;
+  }
+
   // ---------- input ----------
   private bindInput() {
     const el = this.renderer.domElement;
     let down: { moved: number } | null = null;
+    window.addEventListener("pointerdown", (e) => { if (this.director.active && e.isTrusted) this.director.stop(); }, { capture: true });
     el.addEventListener("pointerdown", (e) => { down = { moved: 0 }; el.setPointerCapture(e.pointerId); this.audio.start(); });
     el.addEventListener("pointermove", (e) => {
       if (!down) return;
       down.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+      if (down.moved > 4 && this.photo.state.on) {
+        const ps = this.photo.state;
+        ps.yaw += e.movementX * 0.005;
+        ps.pitch = Math.min(1.45, Math.max(-0.35, ps.pitch + e.movementY * 0.004));
+        return;
+      }
       if (down.moved > 4 && this.state === "play") {
         this.camYaw += e.movementX * 0.005;
         this.camPitch = Math.min(1.3, Math.max(this.camMode === "first" ? -1.0 : -0.25, this.camPitch + e.movementY * 0.004));
         this.lastDrag = this.time;
       }
     });
-    el.addEventListener("pointerup", (e) => { if (down && down.moved <= 4 && this.state === "play") this.scanAt(e.clientX, e.clientY); down = null; });
+    el.addEventListener("pointerup", (e) => { if (down && down.moved <= 4 && this.state === "play" && !this.photo.state.on) this.scanAt(e.clientX, e.clientY); down = null; });
     el.addEventListener("wheel", (e) => {
+      if (this.photo.state.on) { this.photo.state.dist = Math.min(600, Math.max(1.5, this.photo.state.dist * (1 + Math.sign(e.deltaY) * 0.1))); return; }
       if (this.state !== "play" || this.camMode === "first") return;
       this.camDist = Math.min(45, Math.max(2.5, this.camDist * (1 + Math.sign(e.deltaY) * 0.1)));
     }, { passive: true });
@@ -821,9 +1052,16 @@ export class Game {
     window.addEventListener("keydown", (e) => {
       if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
       const k = e.key.toLowerCase();
+      if (this.director.active) { if (e.isTrusted) this.director.stop(); return; }
       this.keys.add(k);
       if (k === " ") e.preventDefault();
       if (this.state !== "play") { if (k === "escape") this.menus.close(); return; }
+      if (this.photo.state.on) {
+        if (k === "c" || k === "escape") this.togglePhoto(false);
+        if (k === " ") this.captureNext = true;
+        return;
+      }
+      if (k === "c" && !this.menus.open && !this.map.open) { this.togglePhoto(true); return; }
       if (k === "escape") {
         if (this.menus.open) this.menus.close();
         else if (this.map.open) this.closeMap();
@@ -859,6 +1097,7 @@ export class Game {
       if (k === "z") { this.goldVisor = !this.goldVisor; this.hud.toast(this.goldVisor ? "Gold sun visor down" : "Sun visor up", 1200); }
       if (k === "x") { this.visorDust = 0; this.frost *= 0.3; this.hud.toast("Visor wiped", 1000); }
       if (k === "b") this.deployShelter();
+      if (k === "r") this.sendBuddy();
       if (k === "g") this.grabThrow();
       if (k === "p") this.audio.muted = !this.audio.muted;
     });
@@ -912,18 +1151,24 @@ export class Game {
   private frame() {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     this.time += dt;
+    this.director.update(dt);
     this.beaconTime.value = this.time;
     const playing = this.state === "play";
-    const halted = this.paused || this.map.open || this.menus.open;
+    const halted = this.paused || this.map.open || this.menus.open || this.photo.state.on;
     const dtSim = playing && !halted && !this.survey ? dt * WARPS[this.warpIdx] : 0;
 
     // sun + temperature from the Mars clock and the REMS analogue
-    const date = new Date(this.startDate.getTime() + this.evaS * 1000);
+    const evaDate = new Date(this.startDate.getTime() + this.evaS * 1000);
+    const date = this.photo.state.hour != null ? dateAtLTST(evaDate, this.photo.state.hour) : evaDate;
     const idle = this.state === "title" || this.state === "briefing" || this.state === "debrief";
     const mt = marsTime(idle ? dateAtLTST(new Date(), 16.2 + Math.sin(this.time * 0.02) * 0.4) : date);
     const sp = sunPosition(mt.ltst, mt.decl);
     this.sunElev = sp.elevDeg; this.ltst = mt.ltst;
     this.tempC = airTempAt(this.analogue, mt.ltst);
+    // dust shades the day and blankets the night: the diurnal swing shrinks with optical depth (ASSUMED shape)
+    const storm = idle ? 0 : Math.min(1, Math.max(0, (this.tau - DUST.clearTau.value) / 4));
+    if (storm > 0) { const mid = ((this.analogue.minAirC ?? -70) + (this.analogue.maxAirC ?? -10)) / 2; this.tempC = this.tempC + (mid - this.tempC) * 0.5 * storm; }
+    this.sky.tau = idle ? DUST.clearTau.value : this.tau;
     this.sky.setSun(sp.elevDeg, sp.azDeg);
     visorMat.envMap = this.sky.envMap();
     const night = sp.elevDeg < 2;
@@ -934,14 +1179,19 @@ export class Game {
 
     if (playing || this.state === "deploy") {
       const k = this.keys;
-      const fwd = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
-      const right = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
+      const fwd = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0) + this.touch.stick.fwd + this.xr.stick.fwd;
+      const right = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0) + this.touch.stick.right + this.xr.stick.right;
       if (fwd || right) this.player.autopilot = false;
       const frozen = !playing || halted || !!this.survey;
       if (this.driving) {
         let input = { throttle: frozen ? 0 : fwd, steer: frozen ? 0 : right, brake: k.has(" ") || frozen };
-        if (this.player.autopilot && this.navRibbon.length() > 0 && !frozen) input = this.autoDrive();
-        this.buggy.update(dtSim, halted ? 0 : dt, input);
+        const auto = this.player.autopilot && this.navRibbon.length() > 0 && !frozen;
+        // fixed sim-time substeps: at x30/x60 warp one frame would move the buggy several metres before
+        // it could steer, overshooting the A* line and snaking. 50 ms steps keep it identical to x1.
+        const n = Math.min(240, Math.max(1, Math.ceil(dtSim / 0.05)));
+        const dr = (halted ? 0 : dt) / n;
+        for (let i = 0; i < n; i++) this.buggy.update(dtSim / n, dr, auto ? this.autoDrive() : input);
+        if (!auto) this.driveVer = -1;
         const seatPos = new THREE.Vector3(), q = new THREE.Quaternion();
         this.buggy.seatPose(seatPos, q);
         this.astro.root.position.copy(seatPos);
@@ -960,6 +1210,8 @@ export class Game {
         this.loose.push(p.pos, new THREE.Vector3(Math.sin(p.heading) * p.speed, 0, -Math.cos(p.heading) * p.speed), 0.45);
         this.buggy.update(0, halted ? 0 : dt, { throttle: 0, steer: 0, brake: true });
       }
+      this.buddy.update(halted ? 0 : dtSim, halted ? 0 : dt, { x: this.player.x, z: this.player.z, heading: this.player.heading }, this.driving, this.buggy);
+      this.buddy.astro.setLamps(this.lampsOn && playing);
       if (playing) this.tickPlay(dt, dtSim, mt.ltst, mt.sol, mt.ls, sp.elevDeg);
     }
     this.updateCamera(dt);
@@ -977,26 +1229,39 @@ export class Game {
     for (const b of this.beacons) (b.group.userData.tick as (() => void) | undefined)?.();
     for (const l of this.landmarkPosts) l.g.children[1].rotation.y += dt;
     this.audio.update(dt, Math.min(1, this.player.speed / 1.2 + Math.max(0, this.player.grade) * 2), 0.3 + (this.devilNear < 40 ? 0.7 : 0));
-    this.helmet.visible = playing && this.camMode === "first";
-    if (playing && this.camMode === "first") this.helmet.update(dt, {
+    this.helmet.visible = playing && this.camMode === "first" && !this.photo.state.on;
+    this.xr.button.classList.toggle("in-play", playing);
+    this.touch.visible = playing && !this.photo.state.on && !this.director.active && !this.map.open && !this.menus.open;
+    if (playing && this.camMode === "first" && !this.photo.state.on) this.helmet.update(dt, {
       frost: this.frost, dust: this.visorDust, gold: this.goldVisor, health: this.vitals.health,
       exertion: Math.min(1, this.player.speed / 1.2), cold: this.tempC < -30,
     });
 
-    this.composer.render();
-    this.css.domElement.style.display = playing || this.state === "deploy" ? "" : "none";
+    if (this.xr.presenting) this.renderer.render(this.scene, this.camera);
+    else this.composer.render();
+    if (this.captureNext) { this.captureNext = false; this.photo.save(this.renderer.domElement); }
+    this.css.domElement.style.display = (playing || this.state === "deploy") && !this.photo.state.on ? "" : "none";
     this.css.render(this.scene, this.camera);
   }
 
   /** Buggy autopilot: steer toward a look-ahead point on the A* ribbon, slow for turns. */
   private autoDrive() {
     const b = this.buggy, rb = this.navRibbon;
-    const pr = rb.project(b.x, b.z);
-    const tgt = rb.pointAt(pr.along + 8);
+    // track progress along the ribbon so a route that doubles back can't snap us onto the other leg
+    const fresh = this.driveVer !== rb.version;
+    const pr = rb.project(b.x, b.z, fresh ? undefined : this.driveAlong);
+    this.driveVer = rb.version; this.driveAlong = Math.max(pr.along, fresh ? 0 : this.driveAlong);
+    const tgt = rb.pointAt(this.driveAlong + 8);
     let d = Math.atan2(tgt.x - b.x, -(tgt.z - b.z)) - b.heading;
     d = Math.atan2(Math.sin(d), Math.cos(d));
-    const remain = rb.length() - pr.along;
-    return { throttle: remain < 3 ? 0 : Math.abs(d) > 0.6 ? 0.35 : 0.8, steer: THREE.MathUtils.clamp(d * 2, -1, 1), brake: remain < 3 };
+    const remain = rb.length() - this.driveAlong;
+    // look ahead for bends: the sharper the turn in the next 6-24 m, the slower we go into it
+    const t0 = rb.tangentAt(this.driveAlong + 4), t1 = rb.tangentAt(this.driveAlong + 18);
+    const bend = Math.acos(THREE.MathUtils.clamp(t0.x * t1.x + t0.z * t1.z, -1, 1));
+    const target = THREE.MathUtils.clamp(3.6 * (1 - bend / 1.6), 1.0, 3.6) * (remain < 15 ? Math.max(0.3, remain / 15) : 1);
+    const v = Math.abs(b.speed);
+    const throttle = remain < 3 ? 0 : v < target ? (Math.abs(d) > 0.6 ? 0.35 : 0.8) : 0;
+    return { throttle, steer: THREE.MathUtils.clamp(d * 2, -1, 1), brake: remain < 3 || v > target + 0.4 };
   }
 
   private tickPlay(dt: number, dtSim: number, ltst: number, sol: number, ls: number, sunElev: number) {
@@ -1011,8 +1276,10 @@ export class Game {
     this.suit = tickSuit(this.suit, dtSim, met + heater);
     if (hz === 0) this.suit = { ...this.suit, remainingH: Math.max(this.suit.remainingH, 0.5) };
     this.tickSep(dtSim);
+    this.tickStorm(dtSim, ls);
     this.vitals = tickVitals(this.vitals, dtSim * hz, this.suit.remainingH <= 0, inShelter);
     if (this.vitals.cause) { this.endEva(false, `${this.vitals.cause}.`); return; }
+    this.tickComms();
     this.tickSurvey(dt);
 
     // dust devils (convective hours) + visor frost on cold nights
@@ -1034,6 +1301,7 @@ export class Game {
       if (Math.hypot(w.x - p.x, w.z - p.z) < 20) {
         this.discovered.add(s.id);
         this.hud.toast(`<b>DISCOVERED</b> · ${s.name}${s.kind === "rover" ? " · say hi to Curiosity!" : ""} <small>(J for journal)</small>`, 5000);
+        if (s.kind === "rover") setTimeout(() => this.report("Photo of Curiosity", "JPL rover team: we see you in Curiosity's hazcams! First human visitor. Please don't touch the wheels."), 2500);
         this.audio.beep(880); setTimeout(() => this.audio.beep(1320), 140);
       }
     }
@@ -1114,9 +1382,14 @@ export class Game {
     if (heater > 0.05) alerts.push({ text: `SUIT HEATER +${(heater * 100).toFixed(0)}% load`, level: heater > 0.4 ? "danger" : "caution" });
     if (this.sep.phase === "warning") alerts.push({ text: `SOLAR STORM IN ${fmtDur(this.sep.t)} · TAKE SHELTER`, level: "danger" });
     if (this.sep.phase === "active") alerts.push({ text: `SOLAR PARTICLE EVENT · dose ×${SURVIVAL.sepDoseMultiplier.value}`, level: "danger" });
+    if (this.storm.phase === "warning") alerts.push({ text: `DUST STORM IN ${fmtDur(this.storm.t)}`, level: "danger" });
+    if (this.storm.phase === "active") alerts.push({ text: `DUST STORM · τ ${this.tau.toFixed(1)} · visibility ~${Math.round(1 / this.sky.fog.density * 1.5 / 10) * 10 > 5000 ? ">5 km" : Math.round(1 / this.sky.fog.density * 1.5 / 10) * 10 + " m"}`, level: this.tau > 2.5 ? "danger" : "caution" });
     if (this.devilNear < 60) alerts.push({ text: `DUST DEVIL ${this.devilNear.toFixed(0)} m`, level: this.devilNear < 15 ? "danger" : "caution" });
     if (this.visorDust > 0.4 && this.camMode === "first") alerts.push({ text: "VISOR DUSTY · X to wipe", level: "info" });
     if (this.scanner) alerts.push({ text: "SPECTROMETER ON", level: "info" });
+    if (this.buddy.status) alerts.push({ text: this.buddy.status, level: "info" });
+    const pend = this.comms.filter((c) => !c.delivered);
+    if (pend.length) alerts.push({ text: `EARTH REPLY IN ${fmtDur(Math.max(0, Math.min(...pend.map((c) => c.arriveS)) - this.evaS))}`, level: "info" });
     const brg = (x: number, z: number) => (Math.atan2(x - p.x, -(z - p.z)) * 180 / Math.PI + 360) % 360;
     const markers: { bearing: number; label: string; kind: "next" | "stop" | "base" | "nav"; dist: number }[] = [];
     const planned = new Set(this.planSites().map((s) => s.id));
@@ -1169,6 +1442,35 @@ export class Game {
     if (this.map.open) this.pushLiveToMap();
   }
 
+  /**
+   * Regional dust storm: more likely in dust season (Ls 180-330). Warned ~30 min ahead (orbital weather
+   * imagery), optical depth ramps up over 40 min, holds, then clears. Light falls with Beer-Lambert,
+   * visibility drops to a few hundred metres, and the crew has to trust the A* route and the minimap.
+   */
+  private tickStorm(dtSim: number, ls: number) {
+    const st = this.storm;
+    if (dtSim <= 0) return;
+    if (this.settings.hazards !== "off" && st.phase === "none" && this.evaS > 1800) {
+      const [a, b] = DUST.seasonLs.value;
+      const perSol = DUST.perSolChance.value * (ls >= a && ls <= b ? 1 : 0.15);
+      if (Math.random() < (dtSim / 88775) * perSol * 3) { // x3: compressed into the daylight hours of an EVA
+        st.phase = "warning"; st.t = 30 * 60; st.peak = DUST.stormPeakTau.value * (0.7 + Math.random() * 0.5); st.dur = (2 + Math.random() * 2) * 3600;
+        this.hud.toast(`<b>DUST STORM WARNING</b> · orbital imagery shows a regional storm front reaching Gale in ~30 min. Visibility will collapse: plan your route home now (H).`, 8000);
+        this.audio.beep(360, 0.4);
+        this.report("Storm acknowledgement", "Weather team: MARCI shows the storm front over Gale. Hold position or return on the planned route; we can't help faster than light.");
+      }
+    } else if (st.phase === "warning") {
+      st.t -= dtSim;
+      if (st.t <= 0) { st.phase = "active"; st.t = 0; this.hud.toast("<b>DUST STORM</b> · the sky is closing in. Follow the cyan A* route; the minimap still knows the way.", 6000); }
+    } else if (st.phase === "active") {
+      st.t += dtSim;
+      const ramp = Math.min(1, st.t / 2400), fade = Math.min(1, Math.max(0, (st.dur - st.t) / 2400));
+      this.tau = DUST.clearTau.value + (st.peak - DUST.clearTau.value) * Math.min(ramp, fade);
+      this.visorDust = Math.min(1, this.visorDust + dtSim * 0.0004 * (this.tau / st.peak));
+      if (st.t >= st.dur) { st.phase = "over"; this.tau = DUST.clearTau.value; this.hud.toast("Dust storm has passed · skies clearing"); }
+    }
+  }
+
   /** Solar particle event: random, warned in advance; dose rate multiplied unless sheltered. Illustrative. */
   private tickSep(dtSim: number) {
     if (this.settings.hazards === "off" || dtSim <= 0) return;
@@ -1200,6 +1502,19 @@ export class Game {
   private updateCamera(dt: number) {
     const cam = this.camera;
     const p = this.player;
+    if (this.xr.presenting) {
+      // VR: first person from the astronaut's (or the driver's) feet; the headset supplies the head pose
+      if (this.state === "play" || this.state === "deploy") {
+        if (this.state === "deploy") this.touchdown();
+        this.astro.setFirstPerson(true);
+        const yaw = this.xr.update(p.x, (this.driving ? this.buggy.y + 0.3 : p.y) - (this.driving ? 0.6 : 0), p.z);
+        this.camYaw = yaw;
+      } else {
+        const cx = this.terrain.meta.width / 2, cz = this.terrain.meta.depth / 2;
+        this.xr.update(cx, this.terrain.heightAt(cx, cz) + 40, cz);
+      }
+      return;
+    }
     if (this.state === "title" || this.state === "briefing" || this.state === "debrief") {
       this.titleT += dt;
       const cx = this.terrain.meta.width / 2, cz = this.terrain.meta.depth / 2;
@@ -1210,6 +1525,23 @@ export class Game {
       cam.lookAt(cx + toS.x * 6000, this.terrain.heightAt(cx, cz) + 900, cz + toS.y * 6000);
       return;
     }
+    if (this.photo.state.on) {
+      const ps = this.photo.state, k = this.keys;
+      const mv = Math.max(4, ps.dist) * dt * 0.8;
+      const fw = (k.has("w") ? 1 : 0) - (k.has("s") ? 1 : 0), rt = (k.has("d") ? 1 : 0) - (k.has("a") ? 1 : 0);
+      ps.fx += (Math.sin(ps.yaw) * fw + Math.cos(ps.yaw) * rt) * mv;
+      ps.fz += (-Math.cos(ps.yaw) * fw + Math.sin(ps.yaw) * rt) * mv;
+      ps.fx = THREE.MathUtils.clamp(ps.fx, 0, this.terrain.meta.width); ps.fz = THREE.MathUtils.clamp(ps.fz, 0, this.terrain.meta.depth);
+      const fy = this.terrain.heightAt(ps.fx, ps.fz) + 1.4;
+      const c = Math.cos(ps.pitch);
+      cam.position.set(ps.fx - Math.sin(ps.yaw) * c * ps.dist, fy + Math.sin(ps.pitch) * ps.dist, ps.fz + Math.cos(ps.yaw) * c * ps.dist);
+      const g = this.terrain.inside(cam.position.x, cam.position.z) ? this.terrain.heightAt(cam.position.x, cam.position.z) + 0.4 : -Infinity;
+      if (cam.position.y < g) cam.position.y = g;
+      if (cam.fov !== ps.fov) { cam.fov = ps.fov; cam.updateProjectionMatrix(); }
+      cam.lookAt(ps.fx, fy, ps.fz);
+      return;
+    }
+    if (cam.fov !== 62) { cam.fov = 62; cam.updateProjectionMatrix(); }
     if ((p.autopilot || p.moving) && this.time - this.lastDrag > 2.5 && this.camMode === "third") {
       let d = p.heading - this.camYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
       this.camYaw += d * Math.min(1, dt * (p.autopilot || this.driving ? 1.5 : 0.6));
