@@ -1,5 +1,10 @@
 # Marswalk
 
+[![Marswalk 30-second demo](media/marswalk_demo_30s.gif)](media/marswalk_demo_30s.mp4)
+
+*30-second demo, recorded from the live build. Click for the full-quality MP4, or
+[play it yourself](https://shivenlak.github.io/MarsWalker/?demo).*
+
 **Walk a real EVA on Mount Sharp, Gale Crater, like a video game, on real NASA terrain.**
 
 Plan a suited EVA with A* on the HiRISE 1 m terrain model, then walk it in 3D. The world under your boots is the
@@ -11,7 +16,7 @@ images, and watch your suit consumables and point of no return as you go.
 sulfur found on Mars), then to the boxwork ridges (ancient groundwater in fractures), and get back with margin.
 
 **Live:** deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`
-(enable it once under *Settings → Pages → Source: GitHub Actions*). Add `?demo` to the URL for the self-running 3-minute tour.
+Add `?demo` to the URL for the self-running 30-second tour.
 
 ### Highlights
 - **Validated against Curiosity:** on 9.8 km of Curiosity's real drives, the rover stayed off our A* no-go terrain ~15× more than chance (`src/core/compare.ts`).

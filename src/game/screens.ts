@@ -33,7 +33,7 @@ export class Screens {
           <button class="btn big" data-act="plan">MISSION</button>
           <button class="btn big" data-act="free">FREE EXPLORE</button>
           <div class="t-row"><button class="btn" data-act="quick">QUICK MISSION</button><button class="btn" data-act="options">OPTIONS</button></div>
-          <button class="btn ghost" data-act="demo">&#9654; WATCH THE 3-MINUTE DEMO</button>
+          <button class="btn" data-act="demo">&#9654; WATCH THE 30-SECOND DEMO</button>
         </div>
         <div class="t-foot">Every metre of ground is real: USGS 1 m HiRISE terrain · HiRISE colour · HRSC-MOLA Mount Sharp ·
           Curiosity traverse, Navcam images and REMS weather. NASA Space Apps 2026.</div>

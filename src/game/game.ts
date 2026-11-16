@@ -541,15 +541,18 @@ export class Game {
   private journal() {
     this.paused = true;
     const sites: JournalEntry[] = store.stops.filter((s) => s.kind !== "base").map((s) => ({
-      id: s.id, kind: s.kind, title: s.name, found: this.discovered.has(s.id) || this.surveyed.has(s.id),
+      id: s.id, kind: s.kind, title: s.name, lon: s.lon, lat: s.lat, found: this.discovered.has(s.id) || this.surveyed.has(s.id),
       text: `${s.what} <i>${s.why}</i>`, img: s.images[0]?.file, caption: `${s.images[0]?.instrument ?? ""}, sol ${s.images[0]?.sol ?? ""}. ${s.evidence}`,
     }));
     const finds: JournalEntry[] = this.world.landmarks.map((l) => ({
-      id: l.id, kind: "landmark", title: l.name, found: this.discovered.has(l.id),
+      id: l.id, kind: "landmark", title: l.name, lon: l.lon, lat: l.lat, found: this.discovered.has(l.id),
       text: `Curiosity parked here at the end of its sol ${l.sol} drive (${l.waypoint})${l.odometerKm ? `, ${l.odometerKm} km into its mission` : ""}.`,
       img: l.images[0]?.file, caption: `${l.images[0]?.instrument}, sol ${l.images[0]?.sol}. ${l.images[0]?.credit ?? ""}`,
     }));
-    this.menus.journal(sites, finds, this.bag, this.deposited);
+    this.menus.journal(sites, finds, this.bag, this.deposited, (e) => {
+      this.paused = false;
+      this.navigateTo({ lon: e.lon, lat: e.lat }, e.title);
+    });
   }
 
   // ---------- mission ----------
@@ -925,61 +928,41 @@ export class Game {
     this.buddy.place(x - Math.sin(h) * 3.5 - Math.cos(h) * 2, z + Math.cos(h) * 3.5 - Math.sin(h) * 2, h);
     this.camYaw = h; this.navCheckT = 0; this.trail.push({ x, z });
   }
-  /** Jump the EVA clock forward to a local solar hour (demo only). */
-  private setHour(hour: number) {
-    const now = new Date(this.startDate.getTime() + this.evaS * 1000);
-    let t = dateAtLTST(now, hour);
-    if (t.getTime() < now.getTime()) t = dateAtLTST(new Date(now.getTime() + MARS_HOUR_S * 1000 * 12), hour);
-    this.evaS += (t.getTime() - now.getTime()) / 1000;
-    this.sunsetWarned = true;
-  }
-
   private startDemo() {
     if (this.director.active) return;
     this.demoSaved = { ...this.settings };
     this.settings = { ...this.settings, travel: "foot", hazards: "off", startHour: 9 };
     this.audio.start();
-    const gz = this.worldOf("gediz"), cu = this.worldOf("curiosity");
+    const cu = this.worldOf("curiosity");
+    // 30-second cut: opens straight on the planner so the click visibly does something
     const steps: DemoStep[] = [
-      { dur: 6, cap: "MARSWALK", sub: "A walkable EVA planner on real NASA terrain · Gale crater, lower Mount Sharp", run: () => this.toTitle() },
-      { dur: 7, cap: "Plan the EVA with A*", sub: "Slope + roughness on 80,000 cells from the USGS 1 m HiRISE terrain model · today's sol, REMS weather, Earth light-time",
+      { dur: 4, cap: "Plan a Mars EVA with A*", sub: "Real NASA terrain: USGS 1 m HiRISE model of Gale crater · slope + roughness on 80,000 cells",
         run: () => { this.screens.hideAll(); this.state = "briefing"; this.map.setProfile(WALKING); this.map.show("briefing", this.briefingInfo()); } },
-      { dur: 6, cap: "Walk or drive: A* re-plans for each vehicle", sub: "The buggy can't climb onto the boxwork ridge, so A* parks it and you walk the last stretch",
-        run: () => this.map.setProfile(ROVER) },
-      { dur: 8, cap: "Validated against Curiosity", sub: "On 9.8 km of Curiosity's real drives, the rover stayed off our no-go terrain 15&times; more than chance",
-        run: () => { this.map.setProfile(WALKING); this.map.validate(); } },
-      { dur: 6, cap: "What-if scenarios in milliseconds", sub: "Every stop order &times; on foot / buggy &times; start time, ranked by time, daylight and suit margin",
-        run: () => this.map.scenarios() },
-      { dur: 6.5, cap: "Touchdown on lower Mount Sharp", sub: "HiRISE colour on the 1 m DTM · Mount Sharp and the crater rim from HRSC-MOLA, with planet curvature",
+      { dur: 3.5, cap: "Validated against Curiosity", sub: "On 9.8 km of Curiosity's real drives, the rover stayed off our no-go terrain 15&times; more than chance",
+        run: () => this.map.validate() },
+      { dur: 4, cap: "Touchdown on lower Mount Sharp", sub: "HiRISE colour on the 1 m DTM · Mars gravity 3.72 m/s²",
         run: () => this.deploy("mission") },
-      { dur: 7, cap: "Every footstep on the real slope", sub: "Mars gravity 3.72 m/s² · walking pace from a Tobler-style model on the local grade",
-        run: () => { this.warpIdx = 0; this.replanNav(""); this.player.autopilot = true; } },
-      { dur: 6, cap: "Go / no-go map draped on the ground", sub: "Red = steeper than 25° or rougher than 0.5 m: the cells A* will never cross",
-        run: () => this.setOverlay(OVERLAYS.indexOf("go/no-go (A*)")), tick: (t) => { if (t > 5.8) this.setOverlay(0); } },
-      { dur: 8, cap: "Autopilot rides the A* route, even at &times;30 time warp", sub: "Suit consumables, dose and return margin tick in simulated time",
-        run: () => { this.warpIdx = 4; this.player.autopilot = true; } },
-      { dur: 8, cap: "Survey a real Curiosity site: Gediz Vallis", sub: "These are Curiosity's own Navcam images from this exact spot (NASA/JPL-Caltech)",
-        run: () => { this.warpIdx = 2; this.teleport(gz.x - 9, gz.z + 7, gz.x, gz.z); this.interact(); },
-        tick: (t) => { if (t > 2 && this.survey && !this.survey.tasks.some((k) => k.running || k.done)) this.survey.tasks[1].running = true; if (t > 7.8) this.leaveSurvey(); } },
-      { dur: 7, cap: "Orbital mineral map: MRO CRISM", sub: "Hydrated-sulfate signatures (CRISM FRT000058A3) · the spectrometer's specimen targets come from it",
-        run: () => { this.setOverlay(OVERLAYS.indexOf("minerals (CRISM)")); this.scanner = true; this.camDist = 30; this.camPitch = 0.7; },
-        tick: (t) => { if (t > 6.8) { this.setOverlay(0); this.camDist = 5.5; this.camPitch = 0.16; } } },
-      { dur: 8, cap: "EV2: no one walks alone", sub: "Your buddy plans its own A* route to a specimen, collects it and brings it back",
-        run: () => { this.warpIdx = 3; this.sendBuddy(); this.camDist = 12; } },
-      { dur: 6, cap: "Inside the helmet", sub: "Gold visor, frost, dust and breath fog; the HUD projected on the visor",
-        run: () => { this.camDist = 5.5; this.camMode = "first"; this.hud.setMode("first"); this.astro.setFirstPerson(true); this.camPitch = 0.35; },
-        tick: (t) => { this.camYaw += 0.15 * (t < 3 ? 1 : -1) * 0.016; if (t > 5.8) { this.camMode = "third"; this.hud.setMode("third"); this.astro.setFirstPerson(false); this.camPitch = 0.16; } } },
-      { dur: 9, cap: "Take the buggy", sub: "Apollo-LRV-class physics: slip, jumps, rollover · the A* autopilot slows for bends",
+      { dur: 4, cap: "Autopilot rides the A* route at &times;30", sub: "Red = no-go cells (steeper than 25° or rougher than 0.5 m) that A* never crosses",
+        run: () => { this.replanNav(""); this.player.autopilot = true; this.warpIdx = 4; this.setOverlay(OVERLAYS.indexOf("go/no-go (A*)")); },
+        tick: (t) => { if (t > 3.9) this.setOverlay(0); } },
+      { dur: 3.5, cap: "Orbital minerals: MRO CRISM", sub: "Hydrated-sulfate signatures pick where the specimens are",
+        run: () => {
+          // jump to the strongest CRISM signal so the colours are actually on screen
+          const hs = store.crism?.hotspots(1)[0];
+          if (hs) { const w = this.terrain.toWorld(lonLatToXY(hs)); this.teleport(w.x, w.z, w.x + 5, w.z + 5); this.player.autopilot = false; }
+          this.setOverlay(OVERLAYS.indexOf("minerals (CRISM)")); this.camDist = 60; this.camPitch = 0.95;
+        },
+        tick: (t) => { if (t > 3.4) { this.setOverlay(0); this.camDist = 5.5; this.camPitch = 0.16; } } },
+      { dur: 3.5, cap: "Take the buggy", sub: "Your EV2 buddy rides along · A* re-plans for the rover's limits",
         run: () => {
           const h = this.player.heading;
           this.buggy.place(this.player.x + Math.cos(h) * 3, this.player.z + Math.sin(h) * 3, h);
           this.enterBuggy(true);
           this.navTarget = { kind: "stop", id: "curiosity" }; this.replanNav("");
-          this.player.autopilot = true; this.warpIdx = 4;
+          this.player.autopilot = true; this.warpIdx = 4; this.camDist = 9;
         } },
-      { dur: 8, cap: "Meet Curiosity at its real position (sol 5073)", sub: "Reports to Earth wait for the real light-time: about 11 minutes each way today",
+      { dur: 3.5, cap: "Meet Curiosity at its real position", sub: "Messages to Earth wait for the real light-time: about 11 minutes each way today",
         run: () => {
-          // stand on the lowest ground ~10 m from the rover so nothing blocks the view of it
           const rx = cu.x + 3, rz = cu.z;
           let best = { x: rx - 7, z: rz + 7, h: Infinity };
           for (let a = 0; a < 16; a++) {
@@ -987,20 +970,12 @@ export class Game {
             const h = this.terrain.heightAt(x, z);
             if (this.terrain.inside(x, z, 8) && h < best.h) best = { x, z, h };
           }
-          this.teleport(best.x, best.z, rx, rz); this.warpIdx = 5; this.camDist = 9; this.report("Photo of Curiosity", "JPL rover team: we see you in Curiosity's hazcams! First human visitor. Please don't touch the wheels."); } },
-      { dur: 9, cap: "A regional dust storm rolls in", sub: "Beer–Lambert sunlight, visibility down to a few hundred metres: trust the A* route home",
-        run: () => { this.warpIdx = 4; this.storm = { phase: "active", t: 2400, peak: DUST.stormPeakTau.value, dur: 3 * 3600 }; this.camDist = 7; } },
-      { dur: 8, cap: "Night falls", sub: "",
-        run: () => {
-          this.storm = { phase: "over", t: 0, peak: 0, dur: 0 }; this.tau = DUST.clearTau.value; this.warpIdx = 2; this.setHour(21);
-          const cap = this.director.el.querySelector(".dm-s");
-          if (cap) cap.innerHTML = `${airTempAt(this.analogue, 21).toFixed(0)} °C now, ${this.analogue.minAirC ?? "?"} °C by dawn (Curiosity's REMS, same season) · the suit heater drains consumables; helmet lamps on`;
+          this.teleport(best.x, best.z, rx, rz); this.warpIdx = 2; this.camDist = 9;
         } },
-      { dur: 7, cap: "Photo mode", sub: "Free camera and any time of day, for your own Mars postcards",
-        run: () => { this.setHour(16.6); this.togglePhoto(true, 16.6); this.photo.state.dist = 14; this.photo.state.pitch = 0.18; },
-        tick: (_t, dt) => { this.photo.state.yaw += dt * 0.25; } },
-      { dur: 6, cap: "MARSWALK · NASA Space Apps 2026", sub: "Real data · A* planning validated against Curiosity · press any key to play",
-        run: () => { this.togglePhoto(false); this.toTitle(); } },
+      { dur: 2, cap: "Then a dust storm rolls in", sub: "Beer–Lambert sunlight · visibility down to a few hundred metres",
+        run: () => { this.warpIdx = 4; this.storm = { phase: "active", t: 2400, peak: DUST.stormPeakTau.value, dur: 3 * 3600 }; this.camDist = 7; } },
+      { dur: 2, cap: "MARSWALK", sub: "Real NASA data · NASA Space Apps 2026 · press any key to play",
+        run: () => { this.storm = { phase: "none", t: 0, peak: 0, dur: 0 }; this.tau = DUST.clearTau.value; this.toTitle(); } },
     ];
     this.director.start(steps);
   }

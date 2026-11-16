@@ -25,7 +25,7 @@ function saveSettings(s: Settings) {
   try { localStorage.setItem("marswalk.settings", JSON.stringify(s)); } catch { /* private mode */ }
 }
 
-export interface JournalEntry { id: string; title: string; text: string; img?: string; caption?: string; found: boolean; kind: string }
+export interface JournalEntry { id: string; title: string; text: string; img?: string; caption?: string; found: boolean; kind: string; lon: number; lat: number }
 
 export class Menus {
   readonly el: HTMLDivElement;
@@ -46,10 +46,13 @@ export class Menus {
         <div class="jr-tabs"><button data-t="sites" class="on">SITES</button><button data-t="finds">CURIOSITY'S PATH</button><button data-t="bag">SAMPLE BAG</button></div>
         <div class="jr-body"></div></div></div>
       <div class="mn hab"><div class="mn-card"><h2>HABITAT AIRLOCK</h2><p class="note hab-status"></p><div class="hab-acts"></div>
-        <button class="btn mn-close">LEAVE</button></div></div>`;
+        <button class="btn mn-close">LEAVE</button></div></div>
+      <div class="mn-lb"><img></div>`;
     root.appendChild(this.el);
     this.el.querySelectorAll<HTMLButtonElement>(".mn-close").forEach((b) => (b.onclick = () => this.close()));
     this.q<HTMLButtonElement>(".jr-x").onclick = () => this.close();
+    const lb = this.q<HTMLElement>(".mn-lb");
+    lb.onclick = () => lb.classList.remove("on");
   }
 
   get open() { return !!this.el.querySelector(".mn.on"); }
@@ -96,11 +99,14 @@ export class Menus {
   }
 
   // ---------- journal ----------
-  journal(sites: JournalEntry[], finds: JournalEntry[], bag: Sample[], deposited: Sample[]) {
+  /** onGo: plot an A* route to the entry and close the journal */
+  journal(sites: JournalEntry[], finds: JournalEntry[], bag: Sample[], deposited: Sample[], onGo: (e: JournalEntry) => void) {
     this.show("journal");
+    const all = [...sites, ...finds];
+    const go = (e: JournalEntry) => `<button class="btn small jr-go" data-id="${e.id}" title="Plot an A* route there">&#9654; GUIDE ME</button>`;
     const card = (e: JournalEntry) => e.found
-      ? `<div class="jr-card"><img src="${e.img}" loading="lazy"><div><h4>${e.title}</h4><p>${e.text}</p><p class="src">${e.caption ?? ""}</p></div></div>`
-      : `<div class="jr-card locked"><div class="jr-q">?</div><div><h4>${e.title}</h4><p class="note">Not yet visited. ${e.kind === "landmark" ? "Follow Curiosity's wheel tracks to find it." : "Marked on the mission map."}</p></div></div>`;
+      ? `<div class="jr-card"><img src="${e.img}" loading="lazy" title="Click to enlarge"><div><h4>${e.title}</h4><p>${e.text}</p><p class="src">${e.caption ?? ""}</p>${go(e)}</div></div>`
+      : `<div class="jr-card locked"><div class="jr-q">?</div><div><h4>${e.title}</h4><p class="note">Not yet visited. ${e.kind === "landmark" ? "Follow Curiosity's wheel tracks to find it." : "Marked on the mission map."}</p>${go(e)}</div></div>`;
     const render = (t: string) => {
       this.el.querySelectorAll<HTMLButtonElement>(".jr-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
       const body = this.q(".jr-body");
@@ -112,6 +118,14 @@ export class Menus {
         body.innerHTML = `<h4>Carrying (${kg(bag)} kg)</h4><ul class="bag">${bag.map(li).join("") || "<li class='note'>Empty</li>"}</ul>
           <h4>Delivered to the habitat (${kg(deposited)} kg)</h4><ul class="bag">${deposited.map(li).join("") || "<li class='note'>None yet</li>"}</ul>`;
       }
+      body.querySelectorAll<HTMLButtonElement>(".jr-go").forEach((b) => (b.onclick = () => {
+        const e = all.find((q) => q.id === b.dataset.id);
+        if (e) { this.close(); onGo(e); }
+      }));
+      body.querySelectorAll<HTMLImageElement>(".jr-card img").forEach((im) => (im.onclick = () => {
+        const lb = this.q<HTMLElement>(".mn-lb");
+        lb.querySelector("img")!.src = im.src; lb.classList.add("on");
+      }));
     };
     this.el.querySelectorAll<HTMLButtonElement>(".jr-tabs button").forEach((b) => (b.onclick = () => render(b.dataset.t!)));
     render("sites");

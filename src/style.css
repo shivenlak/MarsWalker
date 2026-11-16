@@ -272,7 +272,12 @@ kbd { font: 700 12px var(--display); border: 1px solid var(--accent); color: var
 .jr-card img { width: 140px; height: 100px; object-fit: cover; flex: none; filter: sepia(0.25) saturate(1.2); }
 .jr-card h4 { margin: 0 0 4px; font-size: 15px; color: #fff; }
 .jr-card p { margin: 2px 0; font-size: 13px; }
-.jr-card.locked { opacity: 0.55; }
+.jr-card.locked { opacity: 0.7; }
+.jr-card img { cursor: zoom-in; }
+.jr-go { margin-top: 6px; }
+.mn-lb { position: absolute; inset: 0; z-index: 9; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; cursor: zoom-out; }
+.mn-lb.on { display: flex; }
+.mn-lb img { max-width: 94vw; max-height: 90vh; }
 .jr-q { width: 140px; height: 100px; flex: none; display: flex; align-items: center; justify-content: center; font: 800 40px var(--display); color: var(--muted); border: 1px dashed var(--line); }
 .bag { list-style: none; padding: 0; margin: 0 0 10px; }
 .bag li { padding: 6px 0; border-bottom: 1px solid var(--line); }
